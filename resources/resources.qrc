@@ -1,0 +1,13 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file>theme.qss</file>
+        <file alias="icon.png">../packaging/pharmadesk.png</file>
+    </qresource>
+    <qresource prefix="/sql">
+        <file alias="schema_sqlite.sql">../sql/schema_sqlite.sql</file>
+    </qresource>
+    <qresource prefix="/themes">
+        <file alias="dark.qss">themes/dark.qss</file>
+    </qresource>
+</RCC>

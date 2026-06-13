@@ -1,0 +1,49 @@
+# Build
+/build/
+/build-*/
+*.o
+*.so
+cphc_pms
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Qt
+*.autosave
+*_autogen/
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# Runtime data (the SQLite DB lives outside the repo)
+*.sqlite
+*.sqlite3
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.user
+
+# Clang tooling (clang-format/clang-tidy/clangd)
+compile_commands.json
+.cache/
+
+# Claude Code local/per-machine files
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# AppImage build
+/AppDir/
+/build-appimage/
+/packaging/tools/
+*.AppImage
+
+# UI screenshots
+/screenshots/
+
+# Stray build logs
+*.log

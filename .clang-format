@@ -1,0 +1,48 @@
+# Codifies the existing PharmaDesk house style (close to the Qt coding style):
+# 4-space indent; pointer/ref bound to the name (QString &s); function/class/
+# struct definitions break before '{' while control statements and 'else' keep
+# the brace attached; wrapped boolean/arithmetic expressions lead with the
+# operator; short single-statement loops/ifs stay on one line; ~100-col target.
+#
+# The whole tree was formatted with this config (clang-format 22) and verified
+# behavior-preserving (full build + 3057 tests + screenshots all green), so the
+# codebase is now uniform — keep it that way by running clang-format on touched
+# files (e.g. an editor format-on-save or a pre-commit hook). SortIncludes is off
+# to preserve the hand-grouped include order (own header, project, then Qt/system).
+---
+Language:        Cpp
+BasedOnStyle:    LLVM
+IndentWidth:     4
+TabWidth:        4
+UseTab:          Never
+ColumnLimit:     100
+PointerAlignment: Right
+ReferenceAlignment: Right
+BreakBeforeBinaryOperators: All
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterClass:      true
+  AfterStruct:     true
+  AfterUnion:      true
+  AfterEnum:       true
+  AfterFunction:   true
+  AfterNamespace:  false
+  AfterControlStatement: Never
+  BeforeElse:      false
+  BeforeCatch:     false
+  BeforeLambdaBody: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  IndentBraces:    false
+AccessModifierOffset: -4
+NamespaceIndentation: None
+FixNamespaceComments: true
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Never
+SpaceAfterTemplateKeyword: true
+AlwaysBreakTemplateDeclarations: Yes
+Cpp11BracedListStyle: true
+SortIncludes:    false
+...

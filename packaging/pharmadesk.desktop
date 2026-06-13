@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=PharmaDesk
+Comment=Point-of-sale, inventory, purchasing and reports for any pharmacy
+Exec=pharmadesk
+Icon=pharmadesk
+Categories=Office;Finance;
+Terminal=false
