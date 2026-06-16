@@ -143,6 +143,20 @@ install(TARGETS pharmadesk RUNTIME DESTINATION bin)
 install(FILES packaging/pharmadesk.desktop DESTINATION share/applications)
 install(FILES packaging/pharmadesk.png
         DESTINATION share/icons/hicolor/256x256/apps)
+install(FILES README.md DESTINATION share/doc/pharmadesk)
+install(DIRECTORY resources/templates/ DESTINATION share/pharmadesk/templates)
+
+# ── Packaging (CPack → portable .tar.gz for the release workflow) ────────────
+# `cpack -G TGZ` produces pharmadesk-<version>-Linux.tar.gz with the installed
+# layout above. The version is PROJECT_VERSION (single source — see ADR-0005).
+set(CPACK_PACKAGE_NAME "pharmadesk")
+set(CPACK_PACKAGE_VENDOR "PharmaDesk")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "CPHC Pharmacy POS (native Qt/C++)")
+set(CPACK_GENERATOR "TGZ")
+set(CPACK_PACKAGE_FILE_NAME "pharmadesk-${PROJECT_VERSION}-Linux-x86_64")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "pharmadesk")
+include(CPack)
 
 # ── Catalog import CLI (load the legacy Postgres medicines CSV) ──────────────
 add_executable(pharmadesk_import tools/import_catalog.cpp)

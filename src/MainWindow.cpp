@@ -212,10 +212,15 @@ MainWindow::MainWindow(QSqlDatabase db, const UserRecord &user, QWidget *parent)
     // Steady product name in the title bar (never per-section).
     setWindowTitle(Branding::productName());
 
-    // No persistent footer/status bar — it just showed a stray "Ready". Keep the
-    // chrome clean; transient notices (e.g. a completed backup) flash briefly.
+    // Slim footer: the product + version (single-sourced from CMake PROJECT_VERSION
+    // via Branding::appVersion()) sits permanently on the right; transient notices
+    // (e.g. a completed backup) flash on the left.
     statusBar()->setSizeGripEnabled(false);
-    statusBar()->hide();
+    auto *versionLabel = new QLabel(
+        QStringLiteral("%1 v%2").arg(Branding::productName(), Branding::appVersion()), this);
+    versionLabel->setObjectName(QStringLiteral("footerVersion"));
+    versionLabel->setStyleSheet(QStringLiteral("color: palette(mid); padding: 0 8px;"));
+    statusBar()->addPermanentWidget(versionLabel);
 
     // Run a due auto-backup on startup (off-machine copy of the DB).
     SettingsRepository settings(m_db);

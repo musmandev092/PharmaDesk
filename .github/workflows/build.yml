@@ -1,0 +1,108 @@
+name: Build & Release
+
+# The finish line: package a portable build and publish a GitHub Release.
+# Runs ONLY on push to main (never dev / PRs) and on manual dispatch.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to create tags / releases
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Package & Release (Linux x86_64)
+    runs-on: ubuntu-24.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ \
+            qt6-base-dev qt6-base-dev-tools libqt6sql6-sqlite \
+            libgl1-mesa-dev libegl1 libcrypt-dev zlib1g-dev
+
+      - name: Read version from CMake
+        id: ver
+        run: |
+          V=$(grep -oE 'project\(pharmadesk VERSION [0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt \
+                | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          echo "PharmaDesk version: $V"
+
+      - name: Configure (Release)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Package (CPack → TGZ) + checksum
+        id: pkg
+        run: |
+          cd build
+          cpack -G TGZ
+          TARBALL=$(ls pharmadesk-*-Linux-x86_64.tar.gz | head -1)
+          sha256sum "$TARBALL" > "$TARBALL.sha256"
+          echo "tarball=build/$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "sha256=build/$TARBALL.sha256" >> "$GITHUB_OUTPUT"
+          echo "Built $TARBALL"
+          cat "$TARBALL.sha256"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pharmadesk-${{ steps.ver.outputs.version }}-linux-x86_64
+          path: |
+            ${{ steps.pkg.outputs.tarball }}
+            ${{ steps.pkg.outputs.sha256 }}
+          if-no-files-found: error
+
+      - name: Does the version tag already exist?
+        id: tagcheck
+        run: |
+          if git ls-remote --tags origin "refs/tags/${{ steps.ver.outputs.tag }}" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${{ steps.ver.outputs.tag }} already exists — skipping versioned release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Publish a real, immutable release the first time a version is seen.
+      - name: Publish versioned release
+        if: steps.tagcheck.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: PharmaDesk ${{ steps.ver.outputs.tag }}
+          body: |
+            Automated release of PharmaDesk ${{ steps.ver.outputs.tag }}.
+            Portable Linux x86_64 tarball (extract and run `bin/pharmadesk`).
+            Verify with the included `.sha256`.
+          files: |
+            ${{ steps.pkg.outputs.tarball }}
+            ${{ steps.pkg.outputs.sha256 }}
+
+      # Always refresh a rolling "latest" pre-release pointing at main's HEAD build.
+      - name: Refresh rolling 'latest' pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: PharmaDesk (latest from main)
+          prerelease: true
+          body: |
+            Rolling build of `main` (version ${{ steps.ver.outputs.version }}).
+            This pre-release is overwritten on every push to main — use a versioned
+            release (`v<x.y.z>`) for anything you want to keep.
+          files: |
+            ${{ steps.pkg.outputs.tarball }}
+            ${{ steps.pkg.outputs.sha256 }}
