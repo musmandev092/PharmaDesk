@@ -21,6 +21,7 @@ TestStats run_costblender_tests(QSqlDatabase, qint64);
 TestStats run_fefo_tests(QSqlDatabase, qint64);
 TestStats run_barcode_tests(QSqlDatabase, qint64);
 TestStats run_pinpolicy_tests(QSqlDatabase, qint64);
+TestStats run_policy_tests(QSqlDatabase, qint64);
 TestStats run_sale_tests(QSqlDatabase, qint64);
 TestStats run_returns_tests(QSqlDatabase, qint64);
 TestStats run_adjustment_tests(QSqlDatabase, qint64);
@@ -90,6 +91,7 @@ int main(int argc, char *argv[])
         {"fefo", pharmadesk_tests::run_fefo_tests},
         {"barcode", pharmadesk_tests::run_barcode_tests},
         {"pinpolicy", pharmadesk_tests::run_pinpolicy_tests},
+        {"policy", pharmadesk_tests::run_policy_tests},
         {"sale", pharmadesk_tests::run_sale_tests},
         {"returns", pharmadesk_tests::run_returns_tests},
         {"adjustment", pharmadesk_tests::run_adjustment_tests},

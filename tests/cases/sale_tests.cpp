@@ -1076,6 +1076,45 @@ TestStats run_sale_tests(QSqlDatabase db, qint64 userId)
             QStringLiteral("policy: CASHIER + no discount needs no override"));
     }
 
+    // ── Mid-transaction rollback atomicity ───────────────────────────────────
+    // A 2-line cart where the SECOND line is short on stock must fail the WHOLE
+    // sale: the first line's stock decrement, any sale row, and any movement must
+    // all roll back (no partial sale). This pins the transactional guarantee that
+    // a later refactor of commit() must preserve.
+    {
+        const qint64 medOk = makeMedWithStock(db, userId, 100, QStringLiteral("10.00"));
+        const qint64 medShort = makeMedWithStock(db, userId, 1, QStringLiteral("10.00"));
+        s.check(medOk > 0 && medShort > 0, QStringLiteral("rollback: meds created"));
+
+        auto salesCount = [&]() {
+            QSqlQuery q(db);
+            return (q.exec(QStringLiteral("SELECT count(*) FROM sales")) && q.next())
+                       ? q.value(0).toInt()
+                       : -1;
+        };
+        const int okBefore = onHandOf(db, medOk);
+        const int shortBefore = onHandOf(db, medShort);
+        const int salesBefore = salesCount();
+
+        SaleInput in;
+        in.items = {line(medOk, 5, QStringLiteral("10.00")),
+                    line(medShort, 50, QStringLiteral("10.00"))}; // needs 50, has 1
+        in.paymentMode = QStringLiteral("CASH");
+        in.amountTendered = QStringLiteral("1000.00");
+        SaleResult r = SaleService(db, userId).commit(in);
+
+        s.check(!r.ok, QStringLiteral("rollback: commit fails when 2nd line short"));
+        s.check(r.error.contains(QStringLiteral("stock"), Qt::CaseInsensitive),
+                QStringLiteral("rollback: error mentions stock"));
+        s.check(r.saleId <= 0, QStringLiteral("rollback: no valid saleId returned"));
+        s.check(onHandOf(db, medOk) == okBefore,
+                QStringLiteral("rollback: first line's stock NOT decremented"));
+        s.check(onHandOf(db, medShort) == shortBefore,
+                QStringLiteral("rollback: short line's stock unchanged"));
+        s.check(salesCount() == salesBefore,
+                QStringLiteral("rollback: no sales row was committed"));
+    }
+
     return s;
 }
 

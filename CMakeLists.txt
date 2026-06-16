@@ -169,6 +169,7 @@ if (BUILD_TESTING)
         tests/cases/fefo_tests.cpp
         tests/cases/barcode_tests.cpp
         tests/cases/pinpolicy_tests.cpp
+        tests/cases/policy_tests.cpp
         tests/cases/sale_tests.cpp
         tests/cases/returns_tests.cpp
         tests/cases/sessions_tests.cpp
