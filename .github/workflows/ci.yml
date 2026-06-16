@@ -156,15 +156,18 @@ jobs:
         run: |
           gcovr --root . --filter 'src/' --print-summary --txt \
             --exclude '.*_autogen.*' build-cov || true
-      - name: Trust-core branch coverage gate
-        # Branch coverage of the trust core must stay >= the threshold. Report-only
-        # until Phase 3 lands the characterization tests, then enforced (fail-under).
+      - name: Trust-core coverage gate (BLOCKING)
+        # The trust core (money/dosage math + the authorization policies) must keep
+        # >=95% LINE coverage. Branch coverage is reported but not gated: much of the
+        # remaining branch surface is defensive/exception paths that can't be hit
+        # without gaming, so a hard branch gate would invite fake tests (DEBT.md).
         run: |
           gcovr --root . \
             --filter 'src/domain/Money\.cpp' \
             --filter 'src/domain/SaleCalculator\.cpp' \
             --filter 'src/domain/CostBlender\.cpp' \
             --filter 'src/domain/Fefo\.cpp' \
+            --filter 'src/domain/PinPolicy\.cpp' \
             --filter 'src/domain/ControlledSubstancePolicy\.cpp' \
             --filter 'src/domain/DiscountAuthorizationPolicy\.cpp' \
-            --txt --print-summary build-cov || true
+            --txt --print-summary --fail-under-line 95 build-cov

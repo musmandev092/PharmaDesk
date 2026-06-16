@@ -174,6 +174,15 @@ qint64 MedicineRepository::create(const MedicineDraft &d, qint64 userId)
 
 bool MedicineRepository::update(qint64 id, const MedicineDraft &d, qint64 userId)
 {
+    // Atomic write + audit: the UPDATE and its MEDICINE_UPDATED audit row commit
+    // together or not at all, so a price/field change can never silently diverge
+    // from the audit log (security finding H3). update() is only ever called
+    // standalone (the catalog importer uses create() inside its own txn), so this
+    // transaction is never nested.
+    if (!m_db.transaction()) {
+        m_error = m_db.lastError().text();
+        return false;
+    }
     QSqlQuery q(m_db);
     q.prepare(QStringLiteral(
         "UPDATE medicines SET sku=?, primary_barcode=?, brand_name=?, generic_name=?, "
@@ -204,10 +213,23 @@ bool MedicineRepository::update(qint64 id, const MedicineDraft &d, qint64 userId
     q.addBindValue(id);
     if (!q.exec()) {
         m_error = q.lastError().text();
+        m_db.rollback();
         return false;
     }
-    Audit::write(m_db, userId, QStringLiteral("MEDICINE_UPDATED"), QStringLiteral("medicines"), id,
-                 QString(), QStringLiteral("{\"sku\":\"%1\"}").arg(d.sku));
+    try {
+        Audit::writeOrThrow(m_db, userId, QStringLiteral("MEDICINE_UPDATED"),
+                            QStringLiteral("medicines"), id, QString(),
+                            QStringLiteral("{\"sku\":\"%1\"}").arg(d.sku));
+    } catch (const std::exception &e) {
+        m_error = QString::fromUtf8(e.what());
+        m_db.rollback();
+        return false;
+    }
+    if (!m_db.commit()) {
+        m_error = m_db.lastError().text();
+        m_db.rollback();
+        return false;
+    }
     return true;
 }
 

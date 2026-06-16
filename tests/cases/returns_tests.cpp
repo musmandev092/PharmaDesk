@@ -506,6 +506,56 @@ TestStats run_returns_tests(QSqlDatabase db, qint64 userId)
     }
 
     // ====================================================================
+    // 6b) KEYSTONE — voidSale authorization at the SERVICE boundary.
+    //     A cashier must NOT be able to void a sale: the service rejects it
+    //     and writes NOTHING (sale stays COMPLETED, stock unchanged, no audit
+    //     row). A manager/admin still can. This proves the authorized-write
+    //     boundary: a denied role writes nothing; an authorized role succeeds.
+    // ====================================================================
+    {
+        const qint64 med = makeMedicine(db, userId);
+        const qint64 batch = makeBatch(db, userId, med, 100, QStringLiteral("5.00"),
+                                       QDate::currentDate().addYears(1));
+        const SaleResult sale = sellOne(db, userId, med, 3, QStringLiteral("5.00"));
+        s.check(sale.ok && sale.saleId > 0, QStringLiteral("keystone: setup sale committed"));
+        const int qtyAfterSale = batchQty(db, batch);
+
+        auto auditCount = [&]() {
+            QSqlQuery q(db);
+            q.exec(
+                QStringLiteral("SELECT count(*) FROM audit_log WHERE action_type = 'SALE_VOIDED'"));
+            return (q.next()) ? q.value(0).toInt() : -1;
+        };
+        const int voidAuditsBefore = auditCount();
+
+        // A CASHIER is denied — and nothing is written.
+        const qint64 cashierId = makeStaff(db, userId, QStringLiteral("CASHIER"));
+        ReturnService cashierSvc(db, cashierId);
+        const VoidResult denied = cashierSvc.voidSale(sale.saleId);
+        s.check(!denied.ok, QStringLiteral("keystone: cashier void DENIED"));
+        s.check(denied.error.contains(QStringLiteral("manager"), Qt::CaseInsensitive),
+                QStringLiteral("keystone: denial message names manager/admin"));
+        s.check(saleStatus(db, sale.saleId) == QStringLiteral("COMPLETED"),
+                QStringLiteral("keystone: sale still COMPLETED after denied void"));
+        s.check(batchQty(db, batch) == qtyAfterSale,
+                QStringLiteral("keystone: stock NOT restocked by denied void"));
+        s.check(auditCount() == voidAuditsBefore,
+                QStringLiteral("keystone: no SALE_VOIDED audit row written"));
+
+        // A MANAGER is authorized — the void succeeds and is recorded.
+        const qint64 managerId = makeStaff(db, userId, QStringLiteral("MANAGER"));
+        ReturnService managerSvc(db, managerId);
+        const VoidResult allowed = managerSvc.voidSale(sale.saleId);
+        s.check(allowed.ok, QStringLiteral("keystone: manager void ALLOWED"));
+        s.check(saleStatus(db, sale.saleId) == QStringLiteral("VOIDED"),
+                QStringLiteral("keystone: manager void sets VOIDED"));
+        s.check(batchQty(db, batch) == qtyAfterSale + 3,
+                QStringLiteral("keystone: manager void restocks the 3 units"));
+        s.check(auditCount() == voidAuditsBefore + 1,
+                QStringLiteral("keystone: SALE_VOIDED audit row written by manager"));
+    }
+
+    // ====================================================================
     // 7) voidSale sameDayOnly: a sale made today CAN be voided same-day-only.
     //    (Sales committed in-test are stamped CURRENT_TIMESTAMP = today.)
     // ====================================================================

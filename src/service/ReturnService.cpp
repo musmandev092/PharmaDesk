@@ -769,6 +769,15 @@ VoidResult ReturnService::voidSale(qint64 saleId, bool sameDayOnly)
     VoidResult res;
     bool inTxn = false;
     try {
+        // Authorization (keystone): voiding a sale restocks every line and reverses
+        // the cash — financially a full refund — so it is a manager/admin-only
+        // operation. Enforce it HERE at the service boundary (not just in the UI),
+        // so a denied role writes NOTHING: this check runs before any transaction.
+        if (!UserRepository(m_db).isActiveManagerOrAdmin(m_userId)) {
+            throw ReturnError{
+                QStringLiteral("Voiding a sale requires an active manager or admin.")};
+        }
+
         if (!m_db.transaction()) {
             throw ReturnError{m_db.lastError().text()};
         }

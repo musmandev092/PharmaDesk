@@ -18,7 +18,8 @@ Baselines captured at commit `3e392b8` (branch `dev`), host: clang/clang-tidy 22
 | ASan + UBSan (test suite) | clean | **BLOCKING** | See verification note below. |
 | clang-tidy | **750** | report-only | Ratchet to 0, then blocking. Breakdown below. |
 | cppcheck | **9** | report-only | Ratchet to 0, then blocking. Breakdown below. |
-| Trust-core branch coverage | TBD (Phase 3) | report-only → gate | `fail-under` enforced once Phase-3 tests land. |
+| Trust-core LINE coverage | **99.1%** | **BLOCKING** (`--fail-under-line 95`) | Money/SaleCalculator/CostBlender/Fefo/PinPolicy + both policies. |
+| Trust-core branch coverage | 69.0% | report-only | Remaining branches are defensive/exception paths; a hard branch gate would invite fake tests. |
 
 There is no third-party dependency CVE gate: the only external libraries are OS packages
 (Qt6, libxcrypt) consumed via the system package manager, not a vendored/locked dependency
@@ -48,7 +49,21 @@ tree. Dependency-CVE scanning would belong to the distro, not this repo.
 `knownConditionTrueFalse`, `constParameterReference` — one each. All drainable; `uninitMemberVarNoCtor`
 and `noExplicitConstructor` are worth fixing first.
 
-## Known-deferred items (with reasons)
+## Keystone / audit-atomicity status (Phase 4)
+
+- **voidSale authorization (H1) — FIXED.** `ReturnService::voidSale` now enforces an
+  active-manager/admin check at the service boundary before any write; a denied role
+  writes nothing (proven by `returns` test 6b). An authorized void still succeeds and is
+  audited atomically.
+- **MedicineRepository::update (H3) — FIXED.** UPDATE + `MEDICINE_UPDATED` audit now commit
+  in one transaction; an audit failure rolls back the field/price change.
+- **Still open (flagged, NOT yet fixed):**
+  - `MedicineRepository::create` and the catalog importer: `create()` is called *inside the
+    importer's* transaction, so it can't open its own (Qt has no nested transactions). During
+    bulk import the audit IS atomic; the single-add-via-dialog path is not. A safe fix needs
+    an "in-transaction?" flag threaded through — deferred to avoid breaking the importer.
+  - `UserRepository::updateUser` (role change) non-atomic audit; `SettingsRepository::set`
+    unaudited. Both are owner-review items (touch role/settings policy) — Phase 4 follow-up.
 
 - **Audit HMAC chain (security H2).** Schema has `prev_hmac`/`row_hmac`; not yet populated.
   Phase 5 implements it additively. Key-management policy needs owner sign-off before the
