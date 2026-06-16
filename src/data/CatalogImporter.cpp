@@ -1,8 +1,10 @@
 #include "data/CatalogImporter.h"
 
 #include "data/MedicineRepository.h"
+#include "data/XlsxReader.h"
 
 #include <QFile>
+#include <QFileInfo>
 #include <QHash>
 #include <QSqlDatabase>
 #include <QSqlError>
@@ -75,7 +77,9 @@ QVector<QStringList> parseCsv(const QString &text)
 bool toBool(const QString &v)
 {
     const QString s = v.trimmed().toLower();
-    return s == QLatin1String("t") || s == QLatin1String("true") || s == QLatin1String("1");
+    // Accept Postgres ("t"/"f"), spreadsheet ("yes"/"no"/"y"/"n"), and numeric forms.
+    return s == QLatin1String("t") || s == QLatin1String("true") || s == QLatin1String("1")
+           || s == QLatin1String("yes") || s == QLatin1String("y");
 }
 
 QString cell(const QStringList &row, const QHash<QString, int> &idx, const char *name)
@@ -84,28 +88,25 @@ QString cell(const QStringList &row, const QHash<QString, int> &idx, const char 
     return (i >= 0 && i < row.size()) ? row.at(i).trimmed() : QString();
 }
 
-} // namespace
-
-Result importFromCsv(QSqlDatabase &db, const QString &csvPath, qint64 userId)
+// Shared importer: takes already-parsed rows (row 0 = header) from either the CSV
+// or the .xlsx path and inserts each non-skipped medicine in one transaction.
+Result importRows(QSqlDatabase &db, const QVector<QStringList> &rows, qint64 userId)
 {
     Result result;
-
-    QFile f(csvPath);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        result.error = QStringLiteral("Could not open catalog file: %1").arg(csvPath);
-        return result;
-    }
-    const QVector<QStringList> rows = parseCsv(QString::fromUtf8(f.readAll()));
     if (rows.isEmpty()) {
-        result.error = QStringLiteral("Catalog file is empty: %1").arg(csvPath);
+        result.error = QStringLiteral("The import file has no rows.");
         return result;
     }
 
-    // Header → column-index map (order-independent).
+    // Header → column-index map (order-independent). Normalize header names so a
+    // friendly spreadsheet header ("Brand Name") matches the canonical key
+    // ("brand_name").
     QHash<QString, int> idx;
     const QStringList &header = rows.first();
     for (int i = 0; i < header.size(); ++i) {
-        idx.insert(header.at(i).trimmed(), i);
+        QString key = header.at(i).trimmed().toLower();
+        key.replace(QLatin1Char(' '), QLatin1Char('_'));
+        idx.insert(key, i);
     }
     for (const char *required : {"sku", "brand_name", "generic_name", "form", "purchase_unit",
                                  "base_unit", "units_per_purchase"}) {
@@ -183,6 +184,43 @@ Result importFromCsv(QSqlDatabase &db, const QString &csvPath, qint64 userId)
     }
     result.ok = true;
     return result;
+}
+
+} // namespace
+
+Result importFromCsv(QSqlDatabase &db, const QString &csvPath, qint64 userId)
+{
+    Result result;
+    QFile f(csvPath);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        result.error = QStringLiteral("Could not open catalog file: %1").arg(csvPath);
+        return result;
+    }
+    const QVector<QStringList> rows = parseCsv(QString::fromUtf8(f.readAll()));
+    if (rows.isEmpty()) {
+        result.error = QStringLiteral("Catalog file is empty: %1").arg(csvPath);
+        return result;
+    }
+    return importRows(db, rows, userId);
+}
+
+Result importFromXlsx(QSqlDatabase &db, const QString &xlsxPath, qint64 userId)
+{
+    Result result;
+    const XlsxReader::Result x = XlsxReader::read(xlsxPath);
+    if (!x.ok) {
+        result.error = x.error;
+        return result;
+    }
+    return importRows(db, x.rows, userId);
+}
+
+Result importFromFile(QSqlDatabase &db, const QString &path, qint64 userId)
+{
+    if (QFileInfo(path).suffix().compare(QStringLiteral("xlsx"), Qt::CaseInsensitive) == 0) {
+        return importFromXlsx(db, path, userId);
+    }
+    return importFromCsv(db, path, userId);
 }
 
 } // namespace CatalogImporter

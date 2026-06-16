@@ -34,6 +34,10 @@ if (NOT CRYPT_LIBRARY)
     message(FATAL_ERROR "libcrypt (libxcrypt) not found — required for bcrypt.")
 endif()
 
+# zlib (ubiquitous system lib; Qt already links it transitively) is used to inflate
+# the DEFLATE streams inside an .xlsx workbook for the medicine catalog importer.
+find_package(ZLIB REQUIRED)
+
 # ── Shared core: all app code except main() ─────────────────────────────────
 # Used by the GUI app, the headless smoke test, and the screenshot harness.
 add_library(pharmadesk_core STATIC
@@ -82,6 +86,7 @@ add_library(pharmadesk_core STATIC
     src/data/Audit.cpp
     src/data/MedicineRepository.cpp
     src/data/CatalogImporter.cpp
+    src/data/XlsxReader.cpp
     src/data/BatchRepository.cpp
     src/data/InventoryRepository.cpp
     src/data/SupplierRepository.cpp
@@ -125,6 +130,7 @@ target_link_libraries(pharmadesk_core PUBLIC
     Qt${QT_VERSION_MAJOR}::Sql
     Qt${QT_VERSION_MAJOR}::PrintSupport
     ${CRYPT_LIBRARY}
+    ZLIB::ZLIB
 )
 
 # ── GUI application ─────────────────────────────────────────────────────────

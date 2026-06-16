@@ -22,6 +22,7 @@ private slots:
     void editSelected();
     void deleteSelected();
     void addStockSelected();
+    void importCatalog();
 
 private:
     qint64 selectedId() const;

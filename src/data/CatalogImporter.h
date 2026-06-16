@@ -25,4 +25,12 @@ struct Result
 // are attributed to `userId` in the audit log.
 Result importFromCsv(QSqlDatabase &db, const QString &csvPath, qint64 userId);
 
+// Imports medicines from an Excel `.xlsx` workbook (first worksheet). Same format,
+// transaction, and idempotency as importFromCsv.
+Result importFromXlsx(QSqlDatabase &db, const QString &xlsxPath, qint64 userId);
+
+// Imports from a file, dispatching by extension: ".xlsx" → Excel, anything else
+// (".csv"/".txt") → CSV. This is what the in-app Import button calls.
+Result importFromFile(QSqlDatabase &db, const QString &path, qint64 userId);
+
 } // namespace CatalogImporter

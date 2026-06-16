@@ -1,6 +1,7 @@
 #include "ui/MedicinesPage.h"
 
 #include "data/BatchRepository.h"
+#include "data/CatalogImporter.h"
 #include "data/MedicineRepository.h"
 #include "domain/MedicineForm.h"
 #include "ui/MedicineDialog.h"
@@ -9,6 +10,7 @@
 
 #include <QBrush>
 
+#include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -36,10 +38,17 @@ MedicinesPage::MedicinesPage(QSqlDatabase db, qint64 userId, QWidget *parent)
     m_search->setMaximumWidth(560);
 
     auto *addBtn = new QPushButton(QStringLiteral("Add medicine"), content);
+    auto *importBtn = new QPushButton(QStringLiteral("Import…"), content);
+    importBtn->setProperty("variant", "secondary");
+    importBtn->setToolTip(
+        QStringLiteral("Import medicines from an Excel (.xlsx) or CSV file.\n"
+                       "Use the template in resources/templates/medicine_import_template.xlsx.\n"
+                       "Rows whose SKU already exists are skipped (safe to re-run)."));
 
     auto *topRow = new QHBoxLayout;
     topRow->setSpacing(12);
     topRow->addWidget(m_search, 1);
+    topRow->addWidget(importBtn);
     topRow->addWidget(addBtn);
 
     m_table = new QTableWidget(content);
@@ -96,6 +105,7 @@ MedicinesPage::MedicinesPage(QSqlDatabase db, qint64 userId, QWidget *parent)
     pageLayout->addWidget(scroll);
 
     connect(addBtn, &QPushButton::clicked, this, &MedicinesPage::addMedicine);
+    connect(importBtn, &QPushButton::clicked, this, &MedicinesPage::importCatalog);
     connect(editBtn, &QPushButton::clicked, this, &MedicinesPage::editSelected);
     connect(stockBtn, &QPushButton::clicked, this, &MedicinesPage::addStockSelected);
     connect(delBtn, &QPushButton::clicked, this, &MedicinesPage::deleteSelected);
@@ -177,6 +187,32 @@ void MedicinesPage::addMedicine()
     if (dlg.exec() == QDialog::Accepted) {
         reload();
     }
+}
+
+void MedicinesPage::importCatalog()
+{
+    const QString path = QFileDialog::getOpenFileName(
+        this, QStringLiteral("Import medicines"), QString(),
+        QStringLiteral("Spreadsheets (*.xlsx *.csv);;Excel workbook (*.xlsx);;CSV (*.csv)"));
+    if (path.isEmpty()) {
+        return;
+    }
+
+    const CatalogImporter::Result r = CatalogImporter::importFromFile(m_db, path, m_userId);
+    if (!r.ok) {
+        QMessageBox::critical(this, QStringLiteral("Import failed"),
+                              r.error.isEmpty() ? QStringLiteral("The file could not be imported.")
+                                                : r.error);
+        return;
+    }
+
+    reload();
+    QMessageBox::information(
+        this, QStringLiteral("Import complete"),
+        QStringLiteral("Imported: %1\nSkipped (already present / removed): %2\nFailed: %3")
+            .arg(r.imported)
+            .arg(r.skipped)
+            .arg(r.failed));
 }
 
 void MedicinesPage::editSelected()

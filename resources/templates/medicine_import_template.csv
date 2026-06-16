@@ -1,0 +1,4 @@
+sku,brand_name,generic_name,strength,form,manufacturer,primary_barcode,purchase_unit,base_unit,units_per_purchase,prescription_required,controlled_schedule,tax_code_value,reorder_level,reorder_quantity,reorder_unit
+ACE1125-SYR,Acefyl-125,Acefylline Piperazine,125ml,SYRUP,Nabiqasim Industries,08964002675821,BOX,BOTTLE,1,No,NONE,EXEMPT,3,0,PURCHASE
+ACVL400-TAB,Acvlex,Aciclovir,400mg,TABLET,Ferozsons Laboratories,08961100510047,BOX,TABLET,20,Yes,NONE,EXEMPT,40,0,PURCHASE
+MORPH10-TAB,Morfine,Morphine Sulphate,10mg,TABLET,Searle Pakistan,,BOX,TABLET,10,Yes,NARCOTIC,EXEMPT,5,0,PURCHASE
