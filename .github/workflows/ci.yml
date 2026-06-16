@@ -1,0 +1,170 @@
+name: CI
+
+# Quality gates for PharmaDesk. Runs on every push/PR to main and dev.
+#
+# RATCHET MODEL (see DEBT.md):
+#   - build + ctest ............... BLOCKING (must stay green)
+#   - clang-format --Werror ....... BLOCKING (tree is already clean)
+#   - ASan + UBSan (test suite) ... BLOCKING (clean at baseline)
+#   - clang-tidy .................. report-only until DEBT.md count hits 0, then blocking
+#   - cppcheck .................... report-only until DEBT.md count hits 0, then blocking
+#   - coverage (gcovr) ............ report-only summary (trust-core gate lives in its own job)
+#
+# THE FLOOR RULE: no change may RAISE a tracked count. Clean up findings your own
+# change introduces.
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_QPA_PLATFORM: offscreen
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  # ── BLOCKING: build + run the full test suite ─────────────────────────────
+  build-test:
+    name: Build & Test (gcc, Debug)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ \
+            qt6-base-dev qt6-base-dev-tools libqt6sql6-sqlite \
+            libgl1-mesa-dev libegl1 libxcrypt-dev
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+      - name: Test (ctest)
+        run: ctest --test-dir build --output-on-failure
+
+  # ── BLOCKING: formatting must be clean ────────────────────────────────────
+  format:
+    name: clang-format (blocking)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+      - name: Check formatting
+        run: |
+          mapfile -t FILES < <(git ls-files 'src/*.cpp' 'src/*.h' 'tests/*.cpp' 'tests/*.h' 'tools/*.cpp')
+          clang-format --dry-run --Werror "${FILES[@]}"
+
+  # ── BLOCKING: AddressSanitizer + UndefinedBehaviorSanitizer on the suite ──
+  sanitizers:
+    name: ASan + UBSan (blocking)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build clang \
+            qt6-base-dev qt6-base-dev-tools libqt6sql6-sqlite \
+            libgl1-mesa-dev libegl1 libxcrypt-dev
+      - name: Configure (sanitizers)
+        run: >
+          cmake -S . -B build-asan -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+      - name: Build tests
+        run: cmake --build build-asan -j"$(nproc)" --target pharmadesk_tests pharmadesk_barcode_test
+      - name: Run under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:abort_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build-asan --output-on-failure
+
+  # ── REPORT-ONLY: clang-tidy (ratchets to blocking once DEBT.md count = 0) ─
+  clang-tidy:
+    name: clang-tidy (report-only)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build clang clang-tidy \
+            qt6-base-dev qt6-base-dev-tools libqt6sql6-sqlite \
+            libgl1-mesa-dev libegl1 libxcrypt-dev
+      - name: Configure (export compile commands)
+        run: cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Generate moc/ui (so headers resolve)
+        run: cmake --build build -j"$(nproc)" --target pharmadesk_core || true
+      - name: Run clang-tidy
+        run: |
+          mapfile -t FILES < <(git ls-files 'src/*.cpp')
+          run-clang-tidy -p build -quiet "${FILES[@]}" | tee tidy.log || true
+          echo "clang-tidy warnings: $(grep -cE 'warning:' tidy.log || echo 0)"
+
+  # ── REPORT-ONLY: cppcheck (ratchets to blocking once DEBT.md count = 0) ───
+  cppcheck:
+    name: cppcheck (report-only)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+      - name: Run cppcheck
+        run: |
+          mapfile -t FILES < <(git ls-files 'src/*.cpp')
+          cppcheck --enable=warning,performance,portability,style \
+            --inline-suppr --suppress=missingIncludeSystem \
+            --suppress=unmatchedSuppression --quiet \
+            --error-exitcode=0 -I src "${FILES[@]}"
+
+  # ── REPORT-ONLY: coverage summary (gcovr) ─────────────────────────────────
+  coverage:
+    name: coverage (gcovr)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ gcovr \
+            qt6-base-dev qt6-base-dev-tools libqt6sql6-sqlite \
+            libgl1-mesa-dev libegl1 libxcrypt-dev
+      - name: Configure (coverage)
+        run: >
+          cmake -S . -B build-cov -G Ninja -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="--coverage -O0" -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+      - name: Build & test
+        run: |
+          cmake --build build-cov -j"$(nproc)"
+          ctest --test-dir build-cov --output-on-failure
+      - name: Report (overall)
+        run: |
+          gcovr --root . --filter 'src/' --print-summary --txt \
+            --exclude '.*_autogen.*' build-cov || true
+      - name: Trust-core branch coverage gate
+        # Branch coverage of the trust core must stay >= the threshold. Report-only
+        # until Phase 3 lands the characterization tests, then enforced (fail-under).
+        run: |
+          gcovr --root . \
+            --filter 'src/domain/Money\.cpp' \
+            --filter 'src/domain/SaleCalculator\.cpp' \
+            --filter 'src/domain/CostBlender\.cpp' \
+            --filter 'src/domain/Fefo\.cpp' \
+            --filter 'src/domain/ControlledSubstancePolicy\.cpp' \
+            --filter 'src/domain/DiscountAuthorizationPolicy\.cpp' \
+            --txt --print-summary build-cov || true

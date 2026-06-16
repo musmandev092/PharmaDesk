@@ -1,0 +1,37 @@
+# clang-tidy configuration for PharmaDesk.
+#
+# Report-only at first (Phase 2 ratchet): the CI runs this and prints findings but
+# does NOT fail the build until the baseline count in DEBT.md is drained to zero,
+# at which point the gate flips to blocking. THE FLOOR RULE still applies meanwhile:
+# no change may raise the count.
+#
+# Check selection: high-signal correctness + safety families, with Qt/Widgets noise
+# and overly-pedantic style checks disabled. We deliberately exclude most modernize-*
+# (large mechanical churn on a stable codebase) except a few safe ones.
+Checks: >
+  bugprone-*,
+  performance-*,
+  misc-*,
+  readability-misleading-indentation,
+  readability-redundant-control-flow,
+  readability-non-const-parameter,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-emplace,
+  modernize-loop-convert,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -misc-non-private-member-variables-in-classes,
+  -misc-no-recursion,
+  -misc-include-cleaner,
+  -misc-use-anonymous-namespace,
+  -readability-function-cognitive-complexity,
+  -performance-no-int-to-ptr
+
+# Treat nothing as an error yet (report-only). Phase 2 flips this once drained.
+WarningsAsErrors: ''
+
+# Only diagnose our own headers, never Qt/system headers.
+HeaderFilterRegex: '.*/(src)/.*\.h$'
+
+FormatStyle: file
