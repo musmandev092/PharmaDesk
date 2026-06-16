@@ -28,9 +28,9 @@ QFrame *kpiCard(const QString &caption, QLabel **valueOut, QWidget *parent,
     l->setContentsMargins(16, 16, 16, 16);
     l->setSpacing(8);
     auto *cap = new QLabel(caption, card);
-    cap->setObjectName(QStringLiteral("muted"));
+    cap->setObjectName(QStringLiteral("kpiLabel"));
     auto *val = new QLabel(QStringLiteral("—"), card);
-    val->setObjectName(QStringLiteral("h2"));
+    val->setObjectName(QStringLiteral("kpiValue"));
     if (!accent.isEmpty()) {
         val->setStyleSheet(QStringLiteral("color:%1;").arg(accent));
     }

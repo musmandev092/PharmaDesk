@@ -34,9 +34,13 @@ QMainWindow, QDialog { background-color: #0d1117; }
 QLabel, QCheckBox, QRadioButton { background: transparent; }
 
 /* ── Headings / text helpers (set via objectName) ───────────────────────── */
-QLabel#h1 { font-size: 22px; font-weight: 700; color: #e6edf3; }
+QLabel#h1 { font-size: 24px; font-weight: 800; color: #e6edf3; }
 QLabel#h2 { font-size: 16px; font-weight: 700; color: #e6edf3; }
 QLabel#muted { color: #8b96a5; font-size: 12px; }
+
+/* KPI / stat tile: value-dominant hierarchy (matches the light theme). */
+QLabel#kpiLabel { color: #8b96a5; font-size: 11px; font-weight: 600; letter-spacing: 1px; }
+QLabel#kpiValue { color: #e6edf3; font-size: 26px; font-weight: 800; }
 
 /* ── Card surface (objectName "card") ───────────────────────────────────── */
 QFrame#card {
