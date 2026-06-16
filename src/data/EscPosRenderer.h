@@ -1,6 +1,6 @@
 #pragma once
 
-#include "service/SaleService.h"
+#include "domain/SaleTypes.h" // SaleResult / SaleResultLine (neutral DTO header)
 
 #include <QByteArray>
 #include <QString>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "service/SaleService.h" // for SaleResult / SaleResultLine
+#include "domain/SaleTypes.h" // for SaleResult / SaleResultLine
 
 #include <QSqlDatabase>
 
