@@ -267,7 +267,7 @@ SaleResult SaleService::commit(const SaleInput &input)
                     "SELECT id, current_qty, cost_per_unit, mrp_per_unit, expiry_date, "
                     "       is_quarantined, is_expired FROM batches "
                     " WHERE medicine_id = ? AND current_qty > 0 AND is_quarantined = 0 "
-                    "   AND is_expired = 0 AND expiry_date > date('now') "
+                    "   AND is_expired = 0 AND expiry_date > date('now', 'localtime') "
                     " ORDER BY expiry_date ASC, id ASC"));
                 bq.addBindValue(medicineId);
                 if (!bq.exec()) {
@@ -381,7 +381,9 @@ SaleResult SaleService::commit(const SaleInput &input)
                 .arg(input.items.size()));
 
         if (hasControlled) {
-            Audit::writeOrThrow(m_db, m_cashierId, QStringLiteral("CONTROLLED_DISPENSED"),
+            // Audit verb matches the PHP spec (Sale.php: 'NARCOTIC_DISPENSED') so
+            // DRAP/narcotic compliance reports keyed on this string keep working.
+            Audit::writeOrThrow(m_db, m_cashierId, QStringLiteral("NARCOTIC_DISPENSED"),
                                 QStringLiteral("sales"), saleId, QString(),
                                 QStringLiteral("{\"receipt_number\":\"%1\",\"witness_id\":%2,"
                                                "\"prescriber_license\":\"%3\"}")

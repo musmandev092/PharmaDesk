@@ -693,10 +693,26 @@ ReturnResult ReturnService::commitReturn(qint64 saleItemId, int qtyReturned, con
         const qint64 returnId = ins.lastInsertId().toLongLong();
 
         QSqlQuery bq(m_db);
-        bq.prepare(QStringLiteral("SELECT current_qty FROM batches WHERE id = ?"));
+        bq.prepare(QStringLiteral(
+            "SELECT current_qty, is_quarantined, is_expired FROM batches WHERE id = ?"));
         bq.addBindValue(batchId);
         int qtyBefore = 0;
-        if (bq.exec() && bq.next()) qtyBefore = bq.value(0).toInt();
+        bool quarantined = false, expired = false;
+        if (bq.exec() && bq.next()) {
+            qtyBefore = bq.value(0).toInt();
+            quarantined = bq.value(1).toInt() != 0;
+            expired = bq.value(2).toInt() != 0;
+        }
+
+        // Parity with adjudicate(): never restock into a batch that is now
+        // quarantined or expired — the express path must apply the same guard.
+        if (restock && (quarantined || expired)) {
+            throw ReturnError{
+                QStringLiteral("Cannot restock return %1: the batch is now %2. Process it for "
+                               "supplier return or write-off instead.")
+                    .arg(returnNumber,
+                         quarantined ? QStringLiteral("QUARANTINED") : QStringLiteral("EXPIRED"))};
+        }
 
         if (restock) {
             const int qtyAfter = qtyBefore + qtyReturned;

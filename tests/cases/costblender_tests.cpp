@@ -2,6 +2,8 @@
 #include "domain/Money.h"
 #include "domain/CostBlender.h"
 
+#include <stdexcept>
+
 namespace pharmadesk_tests {
 
 TestStats run_costblender_tests(QSqlDatabase db, qint64 userId)
@@ -254,15 +256,8 @@ TestStats run_costblender_tests(QSqlDatabase db, qint64 userId)
     s.check(CostBlender::blendedCostPerBaseUnit(10, 2, QStringLiteral("50.0000"), 6)
                 == QStringLiteral("6.9444"),
             QStringLiteral("blended edge p10 f2 c50.0000 upp6 -> 6.9444"));
-    s.check(CostBlender::blendedCostPerBaseUnit(-1, 0, QStringLiteral("100.0000"), 10)
-                == QStringLiteral("0.0000"),
-            QStringLiteral("blended invalid p-1 f0 upp10 -> 0"));
-    s.check(CostBlender::blendedCostPerBaseUnit(0, -1, QStringLiteral("100.0000"), 10)
-                == QStringLiteral("0.0000"),
-            QStringLiteral("blended invalid p0 f-1 upp10 -> 0"));
-    s.check(CostBlender::blendedCostPerBaseUnit(5, 5, QStringLiteral("100.0000"), 0)
-                == QStringLiteral("0.0000"),
-            QStringLiteral("blended invalid p5 f5 upp0 -> 0"));
+    // PHP parity: invalid input now THROWS (was fail-open "0.0000"). The throw
+    // cases are asserted at the end of this function via the throwsBlended helper.
     s.check(CostBlender::mrpPerBaseUnit(QStringLiteral("100.0000"), 1)
                 == QStringLiteral("100.0000"),
             QStringLiteral("mrpPerBaseUnit 100.0000/1 -> 100.0000"));
@@ -361,10 +356,7 @@ TestStats run_costblender_tests(QSqlDatabase db, qint64 userId)
             QStringLiteral("mrpPerBaseUnit 10.0000/20 -> 0.5000"));
     s.check(CostBlender::mrpPerBaseUnit(QStringLiteral("10.0000"), 100) == QStringLiteral("0.1000"),
             QStringLiteral("mrpPerBaseUnit 10.0000/100 -> 0.1000"));
-    s.check(CostBlender::mrpPerBaseUnit(QStringLiteral("100.0000"), 0) == QStringLiteral("0.0000"),
-            QStringLiteral("mrpPerBaseUnit upp0 -> 0"));
-    s.check(CostBlender::mrpPerBaseUnit(QStringLiteral("100.0000"), -1) == QStringLiteral("0.0000"),
-            QStringLiteral("mrpPerBaseUnit upp-1 -> 0"));
+    // PHP parity: upp < 1 now THROWS (was fail-open "0.0000"); asserted below.
     s.check(CostBlender::lineTotal(5, QStringLiteral("100.0000")) == QStringLiteral("500.00"),
             QStringLiteral("lineTotal p5 c100.0000 -> 500.00"));
     s.check(CostBlender::lineTotal(1, QStringLiteral("99.9900")) == QStringLiteral("99.99"),
@@ -381,6 +373,35 @@ TestStats run_costblender_tests(QSqlDatabase db, qint64 userId)
             QStringLiteral("lineTotal p3 c0.0001 -> 0.00"));
     s.check(CostBlender::lineTotal(10, QStringLiteral("12.3456")) == QStringLiteral("123.46"),
             QStringLiteral("lineTotal p10 c12.3456 -> 123.46"));
+
+    // PHP-parity: invalid input THROWS (does not fail open to "0.0000"). Matches
+    // services/CostBlender.php which raises InvalidArgumentException, so the GRN
+    // post rolls back instead of persisting a bogus zero cost.
+    auto throwsBlended = [](int p, int f, const QString &c, int upp) {
+        try {
+            CostBlender::blendedCostPerBaseUnit(p, f, c, upp);
+            return false;
+        } catch (const std::invalid_argument &) {
+            return true;
+        }
+    };
+    s.check(throwsBlended(-1, 0, QStringLiteral("100.0000"), 1),
+            QStringLiteral("blended: negative paidQty throws"));
+    s.check(throwsBlended(1, -1, QStringLiteral("100.0000"), 1),
+            QStringLiteral("blended: negative focQty throws"));
+    s.check(throwsBlended(1, 0, QStringLiteral("100.0000"), 0),
+            QStringLiteral("blended: units_per_purchase < 1 throws"));
+    // The legitimate nothing-received case still returns zero (NOT a throw).
+    s.check(CostBlender::blendedCostPerBaseUnit(0, 0, QStringLiteral("100.0000"), 1)
+                == QStringLiteral("0.0000"),
+            QStringLiteral("blended: zero receipt -> 0.0000 (not a throw)"));
+    bool mrpThrew = false;
+    try {
+        CostBlender::mrpPerBaseUnit(QStringLiteral("100.0000"), 0);
+    } catch (const std::invalid_argument &) {
+        mrpThrew = true;
+    }
+    s.check(mrpThrew, QStringLiteral("mrpPerBaseUnit: units_per_purchase < 1 throws"));
     return s;
 }
 

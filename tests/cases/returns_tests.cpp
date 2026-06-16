@@ -916,6 +916,64 @@ TestStats run_returns_tests(QSqlDatabase db, qint64 userId)
                 QStringLiteral("quar: on-hand unchanged after refused restock"));
     }
 
+    // ====================================================================
+    // PHP parity: the EXPRESS commitReturn(restock=true) path must apply the
+    // same quarantine/expired guard as adjudicate() — it previously skipped it,
+    // letting QA-failed stock back into saleable inventory.
+    // ====================================================================
+    {
+        const qint64 medId = makeMedicine(db, userId);
+        const qint64 batchId = makeBatch(db, userId, medId, 50, QStringLiteral("2.50"), future);
+        const SaleResult sale = sellOne(db, userId, medId, 5, QStringLiteral("2.50"));
+        const qint64 itemId = firstSaleItemId(db, sale.saleId);
+
+        QSqlQuery up(db);
+        up.prepare(QStringLiteral("UPDATE batches SET is_quarantined = 1 WHERE id = ?"));
+        up.addBindValue(batchId);
+        up.exec();
+
+        const int qtyBefore = batchQty(db, batchId);
+        ReturnService svc(db, userId);
+        const ReturnResult ex
+            = svc.commitReturn(itemId, 2, QStringLiteral("DAMAGED"), /*restock*/ true);
+        s.check(!ex.ok, QStringLiteral("express: restock onto quarantined batch refused"));
+        s.check(ex.error.contains(QStringLiteral("quarantin"), Qt::CaseInsensitive),
+                QStringLiteral("express: error mentions quarantined"));
+        s.check(batchQty(db, batchId) == qtyBefore,
+                QStringLiteral("express: on-hand unchanged after refused express restock"));
+        s.check(returnsRowCount(db, sale.saleId) == 0,
+                QStringLiteral("express: no return row written on refusal (rolled back)"));
+    }
+
+    // PHP parity: a narcotic dispense audits as 'NARCOTIC_DISPENSED' (the DRAP
+    // compliance verb), not 'CONTROLLED_DISPENSED'.
+    {
+        const qint64 narId = makeNarcoticMedicine(db, userId);
+        makeBatch(db, userId, narId, 100, QStringLiteral("5.00"), future);
+        const qint64 mgr = makeStaff(db, userId, QStringLiteral("MANAGER"));
+        SaleService sale(db, userId);
+        SaleInput in;
+        SaleLineInput li;
+        li.medicineId = narId;
+        li.qtySoldDisplay = 1;
+        li.soldUnitLabel = QStringLiteral("TABLET");
+        li.soldUnitFactor = 1;
+        li.unitMrp = QStringLiteral("5.00");
+        in.items << li;
+        in.paymentMode = QStringLiteral("CASH");
+        in.amountTendered = QStringLiteral("100.00");
+        in.prescriberLicense = QStringLiteral("LIC-123");
+        in.controlledWitnessUserId = mgr;
+        const SaleResult r = sale.commit(in);
+        s.check(r.ok, QStringLiteral("verb: narcotic sale committed"));
+        QSqlQuery aq(db);
+        aq.prepare(QStringLiteral("SELECT COUNT(*) FROM audit_log "
+                                  "WHERE action_type = 'NARCOTIC_DISPENSED' AND entity_id = ?"));
+        aq.addBindValue(r.saleId);
+        s.check(aq.exec() && aq.next() && aq.value(0).toInt() == 1,
+                QStringLiteral("verb: audit verb is NARCOTIC_DISPENSED (PHP parity)"));
+    }
+
     return s;
 }
 
