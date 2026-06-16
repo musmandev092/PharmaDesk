@@ -62,6 +62,15 @@ jobs:
           mapfile -t FILES < <(git ls-files 'src/*.cpp' 'src/*.h' 'tests/*.cpp' 'tests/*.h' 'tools/*.cpp')
           clang-format --dry-run --Werror "${FILES[@]}"
 
+  # ── BLOCKING: layer-dependency direction (ui→service→data→domain) ─────────
+  layering:
+    name: layering (blocking)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check include layering
+        run: python3 tools/check_layering.py
+
   # ── BLOCKING: AddressSanitizer + UndefinedBehaviorSanitizer on the suite ──
   sanitizers:
     name: ASan + UBSan (blocking)

@@ -15,6 +15,7 @@ Baselines captured at commit `3e392b8` (branch `dev`), host: clang/clang-tidy 22
 |---|---:|---|---|
 | build + ctest | green / 2 suites pass | **BLOCKING** | Already green. |
 | clang-format `--Werror` | **0** | **BLOCKING** | Tree already clean. |
+| layering (include direction) | 1 baseline | **BLOCKING** | `tools/check_layering.py`; only the documented L2 (`DesktopIntegration→data`) allow-listed. New reverse/skip edges fail. |
 | ASan + UBSan (test suite) | clean | **BLOCKING** | See verification note below. |
 | clang-tidy | **750** | report-only | Ratchet to 0, then blocking. Breakdown below. |
 | cppcheck | **9** | report-only | Ratchet to 0, then blocking. Breakdown below. |
@@ -75,6 +76,17 @@ and `noExplicitConstructor` are worth fixing first.
   measured_ (not 0 — unmeasured).
 - **Production data migration** from the legacy Postgres app is out of scope and its source
   is absent (see `docs/audit_findings.json`).
+
+## Decomposition (Phase 6) — status
+
+- **DONE:** removed the `data→service` reverse edge (sale DTOs → `domain/SaleTypes.h`);
+  added `tools/check_layering.py` + a blocking CI gate so the boundary can't regress.
+- **Deferred (roadmap, not a regression):** splitting the god-files (`ReturnService` 893,
+  `AdminPage` 845, `ReturnsPage` 821, `AnalyticsRepository` 644, the 397-line
+  `SaleService::commit`). These are behavior-bearing and were intentionally NOT split
+  unsupervised (no blind large rewrites). They sit behind the Phase-3 characterization
+  tests; each future split keeps its public header stable and is verified by build + tests
+  + a launches-every-screen smoke run. See `audit/02`/`audit/03`.
 
 ## Ratchet log
 
