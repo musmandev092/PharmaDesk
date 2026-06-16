@@ -89,19 +89,39 @@ void requireWitnessIfControlled(QSqlDatabase &db, const QString &schedule, qint6
 
 // Bump the operator's open shift refund counter for a CASH original sale, so the
 // Z-report / reconciliation see the cash that left the drawer. No-op otherwise.
+//
+// Money columns are TEXT decimals: doing `col = col + ?` in SQL would coerce them
+// to IEEE-754 doubles and re-introduce float drift (finding H5). Instead read the
+// current value, add with fixed-point Money, and write the string back — mirroring
+// SessionRepository::bumpForSale. Runs inside the caller's transaction; a failure
+// throws so the whole return rolls back rather than silently losing cash.
 void bumpSessionRefund(QSqlDatabase &db, qint64 cashierId, const QString &paymentMode,
                        const QString &refund)
 {
     if (paymentMode != QLatin1String("CASH")) {
         return;
     }
-    QSqlQuery q(db);
-    q.prepare(
-        QStringLiteral("UPDATE cashier_sessions SET total_refunds_paid = total_refunds_paid + ?, "
-                       "updated_at = CURRENT_TIMESTAMP WHERE cashier_id = ? AND status = 'OPEN'"));
-    q.addBindValue(refund);
-    q.addBindValue(cashierId);
-    q.exec();
+    QSqlQuery sel(db);
+    sel.prepare(QStringLiteral("SELECT id, total_refunds_paid FROM cashier_sessions "
+                               "WHERE cashier_id = ? AND status = 'OPEN' LIMIT 1"));
+    sel.addBindValue(cashierId);
+    if (!sel.exec()) {
+        throw ReturnError{sel.lastError().text()};
+    }
+    if (!sel.next()) {
+        return; // no open shift — nothing to record
+    }
+    const qint64 sessionId = sel.value(0).toLongLong();
+    const Money updated = Money::fromString(sel.value(1).toString()) + Money::fromString(refund);
+
+    QSqlQuery upd(db);
+    upd.prepare(QStringLiteral("UPDATE cashier_sessions SET total_refunds_paid = ?, "
+                               "updated_at = CURRENT_TIMESTAMP WHERE id = ?"));
+    upd.addBindValue(updated.toString(Money::ScaleMoney));
+    upd.addBindValue(sessionId);
+    if (!upd.exec()) {
+        throw ReturnError{upd.lastError().text()};
+    }
 }
 } // namespace
 

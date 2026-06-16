@@ -250,6 +250,40 @@ const QVector<Migration> &migrationRegistry()
                             "SELECT RAISE(ABORT, 'z_report_archive is append-only: DELETE is not "
                             "allowed'); END"),
          }},
+        // v6 (Data integrity, Phase 5): index foreign-key / hot-join columns that
+        // SQLite does not auto-index (esp. returns.sale_item_id, scanned on every
+        // return), and enforce the inventory-ledger arithmetic invariant
+        // (qty_after = qty_before + qty_delta) with a trigger — SQLite cannot ADD a
+        // CHECK to an existing table, and a trigger needs no risky table rebuild.
+        // All additive and reversible (DROP INDEX / DROP TRIGGER).
+        {6,
+         {
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_returns_sale_item "
+                            "ON returns(sale_item_id)"),
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_returns_medicine "
+                            "ON returns(medicine_id)"),
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_returns_batch "
+                            "ON returns(batch_id)"),
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_batches_supplier "
+                            "ON batches(supplier_id)"),
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_batches_grn "
+                            "ON batches(grn_id)"),
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_grn_lines_medicine "
+                            "ON grn_lines(medicine_id)"),
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_grn_lines_batch "
+                            "ON grn_lines(batch_id)"),
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_sales_session "
+                            "ON sales(cashier_session_id)"),
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_stock_adj_medicine "
+                            "ON stock_adjustments(medicine_id)"),
+             QStringLiteral("CREATE INDEX IF NOT EXISTS idx_grn_docs_received_by "
+                            "ON grn_documents(received_by)"),
+             QStringLiteral("CREATE TRIGGER IF NOT EXISTS inv_mv_consistent "
+                            "BEFORE INSERT ON inventory_movements "
+                            "WHEN NEW.qty_after <> NEW.qty_before + NEW.qty_delta BEGIN "
+                            "SELECT RAISE(ABORT, 'inventory_movements: qty_after must equal "
+                            "qty_before + qty_delta'); END"),
+         }},
     };
     return kMigrations;
 }

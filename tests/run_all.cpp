@@ -35,6 +35,7 @@ TestStats run_schema_tests(QSqlDatabase, qint64);
 TestStats run_catalog_tests(QSqlDatabase, qint64);
 TestStats run_printing_tests(QSqlDatabase, qint64);
 TestStats run_auth_tests(QSqlDatabase, qint64);
+TestStats run_invariant_tests(QSqlDatabase, qint64);
 } // namespace pharmadesk_tests
 
 int main(int argc, char *argv[])
@@ -105,6 +106,7 @@ int main(int argc, char *argv[])
         {"catalog", pharmadesk_tests::run_catalog_tests},
         {"printing", pharmadesk_tests::run_printing_tests},
         {"auth", pharmadesk_tests::run_auth_tests},
+        {"invariant", pharmadesk_tests::run_invariant_tests}, // runs last: scans the whole DB
     };
 
     int totalPass = 0, totalFail = 0;
