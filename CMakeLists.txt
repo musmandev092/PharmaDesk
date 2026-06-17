@@ -38,6 +38,10 @@ endif()
 # the DEFLATE streams inside an .xlsx workbook for the medicine catalog importer.
 find_package(ZLIB REQUIRED)
 
+# OpenSSL libcrypto provides the Ed25519 verify for the offline, node-locked license
+# check (domain/Licensing). Standard system library; no vendored crypto.
+find_package(OpenSSL REQUIRED)
+
 # ── Shared core: all app code except main() ─────────────────────────────────
 # Used by the GUI app, the headless smoke test, and the screenshot harness.
 add_library(pharmadesk_core STATIC
@@ -48,6 +52,8 @@ add_library(pharmadesk_core STATIC
     src/domain/Bcrypt.cpp
     src/domain/PinPolicy.cpp
     src/domain/Money.cpp
+    src/domain/MachineFingerprint.cpp
+    src/domain/Licensing.cpp
     src/domain/SaleCalculator.cpp
     src/domain/Fefo.cpp
     src/domain/MedicineForm.cpp
@@ -131,6 +137,7 @@ target_link_libraries(pharmadesk_core PUBLIC
     Qt${QT_VERSION_MAJOR}::PrintSupport
     ${CRYPT_LIBRARY}
     ZLIB::ZLIB
+    OpenSSL::Crypto
 )
 
 # ── GUI application ─────────────────────────────────────────────────────────
@@ -197,6 +204,7 @@ if (BUILD_TESTING)
         tests/cases/adjustment_tests.cpp
         tests/cases/printing_tests.cpp
         tests/cases/auth_tests.cpp
+        tests/cases/licensing_tests.cpp
         tests/cases/audit_chain_tests.cpp
         tests/cases/invariant_tests.cpp
         resources/resources.qrc
