@@ -16,6 +16,7 @@
 #include "domain/SettingsKeys.h"
 #include "service/GrnService.h"
 #include "service/SaleService.h"
+#include "ui/ActivationDialog.h"
 #include "ui/AdminPage.h"
 #include "ui/ChangePinDialog.h"
 #include "ui/DashboardPage.h"
@@ -259,6 +260,10 @@ int main(int argc, char *argv[])
         {
             LoginDialog d(new UserRepository(h), new SettingsRepository(h));
             shot(&d, QStringLiteral("02_login"), 420, 460);
+        }
+        {
+            ActivationDialog d(QStringLiteral("unactivated"));
+            shot(&d, QStringLiteral("02b_activation"), 560, 560);
         }
         {
             PosTerminalPage p(h, uid);
