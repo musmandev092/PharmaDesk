@@ -194,12 +194,10 @@ void PurchasingPage::reloadGrns()
         auto *posted = new QTableWidgetItem(g.postedAt.left(10));
         UiUtil::rightAlign(posted);
         m_grns->setItem(i, 3, posted);
-        auto *status = new QTableWidgetItem(g.status);
-        if (g.status == QLatin1String("POSTED"))
-            UiUtil::colorItem(status, UiUtil::Palette::Success, true);
-        else if (g.status == QLatin1String("CANCELLED"))
-            UiUtil::colorItem(status, UiUtil::Palette::Danger);
-        m_grns->setItem(i, 4, status);
+        const QColor stColor = g.status == QLatin1String("POSTED")      ? UiUtil::Palette::Success
+                               : g.status == QLatin1String("CANCELLED") ? UiUtil::Palette::Danger
+                                                                        : UiUtil::Palette::Muted;
+        UiUtil::setBadge(m_grns, i, 4, g.status, stColor);
         auto *lines = new QTableWidgetItem(QString::number(g.lineCount));
         UiUtil::rightAlign(lines);
         m_grns->setItem(i, 5, lines);

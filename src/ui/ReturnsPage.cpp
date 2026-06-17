@@ -670,14 +670,12 @@ void ReturnsPage::reloadRecent()
         UiUtil::rightAlign(refund);
         m_recent->setItem(i, 4, refund);
         m_recent->setItem(i, 5, new QTableWidgetItem(r.reason));
-        auto *status = new QTableWidgetItem(r.status);
-        if (r.status == QLatin1String("APPROVED_RESTOCK"))
-            UiUtil::colorItem(status, UiUtil::Palette::Success, true);
-        else if (r.status == QLatin1String("WRITE_OFF"))
-            UiUtil::colorItem(status, UiUtil::Palette::Danger);
-        else if (r.status == QLatin1String("PENDING_REVIEW"))
-            UiUtil::colorItem(status, UiUtil::Palette::Warning);
-        m_recent->setItem(i, 6, status);
+        const QColor stColor
+            = r.status == QLatin1String("APPROVED_RESTOCK") ? UiUtil::Palette::Success
+              : r.status == QLatin1String("WRITE_OFF")      ? UiUtil::Palette::Danger
+              : r.status == QLatin1String("PENDING_REVIEW") ? UiUtil::Palette::Warning
+                                                            : UiUtil::Palette::Muted;
+        UiUtil::setBadge(m_recent, i, 6, r.status, stColor);
     }
     UiUtil::emptyState(m_recent, QStringLiteral("No returns yet."));
 }

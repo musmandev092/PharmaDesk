@@ -348,12 +348,10 @@ void SessionsPage::reload()
         }
         m_table->setItem(i, 5, variance);
 
-        auto *status = new QTableWidgetItem(r.status);
-        if (r.status == QLatin1String("OPEN"))
-            UiUtil::colorItem(status, UiUtil::Palette::Warning, true);
-        else if (r.status == QLatin1String("RECONCILED"))
-            UiUtil::colorItem(status, UiUtil::Palette::Success, true);
-        m_table->setItem(i, 6, status);
+        const QColor stColor = r.status == QLatin1String("OPEN")         ? UiUtil::Palette::Warning
+                               : r.status == QLatin1String("RECONCILED") ? UiUtil::Palette::Success
+                                                                         : UiUtil::Palette::Muted;
+        UiUtil::setBadge(m_table, i, 6, r.status, stColor);
     }
     UiUtil::emptyState(m_table, QStringLiteral("No sessions yet — click “Open shift”."));
 
