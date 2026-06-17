@@ -333,9 +333,7 @@ void InventoryPage::reloadBatches()
         UiUtil::rightAlign(mrp);
         m_batches->setItem(i, 5, mrp);
         const Status st = statusFor(b);
-        auto *sItem = new QTableWidgetItem(st.text);
-        UiUtil::colorItem(sItem, st.color, true);
-        m_batches->setItem(i, 6, sItem);
+        UiUtil::setBadge(m_batches, i, 6, st.text, st.color);
     }
     UiUtil::emptyState(m_batches, QStringLiteral("No batches found."));
     m_batches->resizeRowsToContents();

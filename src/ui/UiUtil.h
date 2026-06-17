@@ -48,4 +48,10 @@ void beginFill(QTableWidget *table);
 // all columns. Call after populating when rowCount would otherwise be 0.
 void emptyState(QTableWidget *table, const QString &message);
 
+// Render a categorical status as a centred PILL in a table cell: a tinted
+// rounded background (derived from `color`) with the colour as the text. Use for
+// fixed-set status columns (expiry tier, schedule, GRN/return status) — it reads
+// as a proper badge rather than coloured text. Replaces any item in that cell.
+void setBadge(QTableWidget *table, int row, int col, const QString &text, const QColor &color);
+
 } // namespace UiUtil

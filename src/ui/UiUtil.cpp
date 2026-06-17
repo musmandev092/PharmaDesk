@@ -5,7 +5,9 @@
 #include <QBrush>
 #include <QDialogButtonBox>
 #include <QFont>
+#include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QStyle>
@@ -104,8 +106,19 @@ void colorItem(QTableWidgetItem *item, const QColor &color, bool bold)
 
 void beginFill(QTableWidget *table)
 {
-    if (table) {
-        table->clearSpans();
+    if (!table) {
+        return;
+    }
+    table->clearSpans();
+    // Drop any cell widgets (e.g. status pills from setBadge) left by a previous
+    // fill, so a row that no longer has a badge doesn't keep a stale one painted
+    // over its new item.
+    for (int r = 0; r < table->rowCount(); ++r) {
+        for (int c = 0; c < table->columnCount(); ++c) {
+            if (table->cellWidget(r, c)) {
+                table->removeCellWidget(r, c);
+            }
+        }
     }
 }
 
@@ -122,6 +135,44 @@ void emptyState(QTableWidget *table, const QString &message)
     table->setItem(0, 0, item);
     table->setSpan(0, 0, 1, table->columnCount());
     table->setRowHeight(0, 80);
+}
+
+void setBadge(QTableWidget *table, int row, int col, const QString &text, const QColor &color)
+{
+    if (!table || row < 0 || col < 0) {
+        return;
+    }
+    // Tint = the status colour at ~14% over white — a soft pill background that
+    // stays legible with the full-strength colour as text (matches the web app's
+    // badge tints). QSS has no alpha-blend, so flatten it here.
+    constexpr double a = 0.14;
+    const QColor tint(static_cast<int>(255 * (1 - a) + color.red() * a),
+                      static_cast<int>(255 * (1 - a) + color.green() * a),
+                      static_cast<int>(255 * (1 - a) + color.blue() * a));
+
+    auto *pill = new QLabel(text);
+    pill->setAlignment(Qt::AlignCenter);
+    pill->setStyleSheet(QStringLiteral("QLabel { background: %1; color: %2; border-radius: 9px; "
+                                       "padding: 2px 9px; font-size: 11px; font-weight: 700; }")
+                            .arg(tint.name(), color.name()));
+    // QSS padding isn't reliably reflected in the label's sizeHint, so the host
+    // table's ResizeToContents can under-size the column and clip the text. Pin a
+    // minimum width from font metrics (text + the 2×9px padding) so it never clips.
+    QFont pf = pill->font();
+    pf.setPixelSize(11);
+    pf.setBold(true);
+    pill->setMinimumWidth(QFontMetrics(pf).horizontalAdvance(text) + 24);
+
+    // Centre the pill in the cell (don't stretch it full-width).
+    auto *cell = new QWidget;
+    auto *l = new QHBoxLayout(cell);
+    l->setContentsMargins(6, 3, 6, 3);
+    l->addStretch();
+    l->addWidget(pill);
+    l->addStretch();
+
+    table->takeItem(row, col); // drop any prior item in this cell
+    table->setCellWidget(row, col, cell);
 }
 
 } // namespace UiUtil

@@ -133,15 +133,13 @@ void MedicinesPage::reload()
             new QTableWidgetItem(
                 QStringLiteral("%1\n%2 %3").arg(r.brandName, r.genericName, r.strength).trimmed()));
         m_table->setItem(i, 2, new QTableWidgetItem(MedicineForm::label(r.form)));
-        auto *sched = new QTableWidgetItem(r.controlledSchedule == QLatin1String("NONE")
-                                               ? QStringLiteral("—")
-                                               : r.controlledSchedule);
         if (r.controlledSchedule == QLatin1String("NARCOTIC")) {
-            UiUtil::colorItem(sched, UiUtil::Palette::Danger, true);
+            UiUtil::setBadge(m_table, i, 3, r.controlledSchedule, UiUtil::Palette::Danger);
         } else if (r.controlledSchedule != QLatin1String("NONE")) {
-            UiUtil::colorItem(sched, UiUtil::Palette::Warning, true);
+            UiUtil::setBadge(m_table, i, 3, r.controlledSchedule, UiUtil::Palette::Warning);
+        } else {
+            m_table->setItem(i, 3, new QTableWidgetItem(QStringLiteral("—")));
         }
-        m_table->setItem(i, 3, sched);
         auto *onHand = new QTableWidgetItem(QStringLiteral("%1 %2").arg(r.onHand).arg(r.baseUnit));
         UiUtil::rightAlign(onHand);
         m_table->setItem(i, 4, onHand);
