@@ -7,6 +7,8 @@
 
 #include "framework/TestStats.h"
 
+#include "data/Audit.h"
+
 #include <QSqlQuery>
 #include <QString>
 
@@ -117,6 +119,12 @@ TestStats run_invariant_tests(QSqlDatabase db, qint64)
                                          "pragma_foreign_key_check())"))
                 == 0,
             QStringLiteral("INV-10: PRAGMA foreign_key_check is clean"));
+
+    // INV-11: the audit-log HMAC chain over EVERY chained row written this run (by
+    // every module's sales/returns/adjustments/etc.) reconciles end-to-end.
+    const Audit::ChainResult chain = Audit::verifyChain(db);
+    s.check(chain.ok, QStringLiteral("INV-11: audit HMAC chain verifies clean"));
+    s.check(chain.checked > 0, QStringLiteral("INV-11: audit chain is non-empty"));
 
     return s;
 }

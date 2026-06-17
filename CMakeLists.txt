@@ -197,6 +197,7 @@ if (BUILD_TESTING)
         tests/cases/adjustment_tests.cpp
         tests/cases/printing_tests.cpp
         tests/cases/auth_tests.cpp
+        tests/cases/audit_chain_tests.cpp
         tests/cases/invariant_tests.cpp
         resources/resources.qrc
     )

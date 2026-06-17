@@ -66,9 +66,13 @@ and `noExplicitConstructor` are worth fixing first.
   - `UserRepository::updateUser` (role change) non-atomic audit; `SettingsRepository::set`
     unaudited. Both are owner-review items (touch role/settings policy) — Phase 4 follow-up.
 
-- **Audit HMAC chain (security H2).** Schema has `prev_hmac`/`row_hmac`; not yet populated.
-  Phase 5 implements it additively. Key-management policy needs owner sign-off before the
-  chain verifier becomes a gate.
+- **Audit HMAC chain (security H2) — DONE.** `Audit::write` now populates
+  `prev_hmac`/`row_hmac` on every insert (`row_hmac = HMAC_SHA256(key, prev_hmac ‖ canonical)`,
+  field order mirroring the PHP Postgres trigger). The per-install key is off-DB in
+  `audit.key` (owner-only). `Audit::verifyChain` walks + re-derives the chain; covered by
+  `audit_chain` tests (positive + tamper detection) and invariant INV-11 (whole-DB chain).
+  _Open owner decision:_ key **rotation** policy (a single per-install key today; rotating
+  invalidates verification of rows signed by the old key — see `docs/security-model.md`).
 - **Mutation testing (Phase 8).** `mull` is not installable on this host: it is not in the
   Arch repos/AUR and the system ships **LLVM 22**, ahead of mull's supported LLVM. Plan: run
   mull in a pinned-LLVM (≤18) Docker image against the trust-core TUs; record honest

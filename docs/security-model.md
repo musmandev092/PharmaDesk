@@ -10,7 +10,7 @@ attackers (the app is offline, single-host).
 |---|---|---|
 | User credentials (PINs) | Theft, brute force | bcrypt (`$2b$`, cost 12) via OS libxcrypt; account lockout with exponential backoff. |
 | Privileged operations (void, refund, price/role change, stock adjust, GRN) | Unauthorized action by a lower-privileged user | Authorization enforced at the **service boundary** (not just UI). e.g. `voidSale` requires an active manager/admin. |
-| Audit trail | Silent tampering / deletion | `audit_log` is append-only (DB triggers block UPDATE/DELETE); writes are in the same transaction as the business change. HMAC tamper-chain scaffolded (follow-up). |
+| Audit trail | Silent tampering / deletion | `audit_log` is append-only (DB triggers block UPDATE/DELETE) AND HMAC-chained (`prev_hmac`/`row_hmac`, key in off-DB `audit.key`); writes are in the same transaction as the business change. `Audit::verifyChain` detects any edit/forgery/reinsertion. |
 | Money / stock integrity | Rounding drift, oversell, negative stock, ledger gaps | Fixed-point Money (no float); guarded atomic decrement; `inventory_movements` ledger + consistency trigger; invariant tests. |
 | Z-reports (day-close) | Tampering | Append-only archive + HMAC signature with an off-DB `zreport.key` (owner-only perms). |
 | Backups | Exposure of PINs/patient data | Backup file written owner-only; WAL folded for a consistent copy. |
@@ -45,8 +45,10 @@ types; Money arithmetic is overflow-checked.
 
 - Passwords/PINs: bcrypt (OS libxcrypt). No home-grown crypto.
 - Z-report signing key: `zreport.key`, owner-only, stored off the DB (see `AppPaths`).
-- Audit HMAC chain key (when implemented): must live off-DB; rotation policy is an owner
-  decision — flagged in DEBT.md before the chain verifier becomes a gate.
+- Audit HMAC chain key: `audit.key`, 32 random bytes, owner-only, off the DB, generated
+  once. **Rotation** is an open owner decision — a single per-install key today; rotating it
+  invalidates verification of rows signed by the old key, so a rotation must archive the old
+  key alongside the rows it signed.
 - No hardcoded credentials or API keys in the source.
 
 ## What is out of scope

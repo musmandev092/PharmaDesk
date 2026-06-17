@@ -1,6 +1,7 @@
 # ADR-0004: Append-only, HMAC-chained audit log
 
-**Status:** Accepted (append-only implemented; HMAC chain scaffolded, not yet populated)
+**Status:** Accepted — append-only AND HMAC chain implemented (`Audit::write` /
+`Audit::verifyChain`). Open: key-rotation policy.
 
 ## Context
 A pharmacy's audit trail (sales, voids, stock/price/role changes, controlled dispensing)
@@ -18,7 +19,11 @@ must be tamper-evident for compliance. The source app used an HMAC-chained appen
 - **+** In-place edits/deletes are blocked even with raw SQLite access.
 - **+** Once the chain is populated, wholesale DB-file substitution becomes detectable
   (the chain won't verify).
-- **−/open:** the HMAC chain is **not yet populated** (columns default to `''`). Until then
-  the log is append-only but not cryptographically tamper-*evident*. Implementing it is
-  additive; the **key location & rotation policy needs owner sign-off** before the chain
-  verifier becomes a release gate. Tracked as finding H2 in DEBT.md / `audit/05`.
+- **+ Implemented:** `Audit::write` populates `prev_hmac`/`row_hmac` on every insert
+  (`row_hmac = HMAC_SHA256(audit.key, prev_hmac ‖ canonical(row))`); `Audit::verifyChain`
+  re-derives and validates the chain. The key lives off-DB in `audit.key` (owner-only),
+  generated once. Editing a row, forging a `row_hmac`, or dropping+reinserting breaks the
+  chain. Covered by `audit_chain` tests + invariant INV-11.
+- **− Open:** **key rotation** — a single per-install key today; rotating it invalidates
+  verification of rows signed by the old key, so rotation must archive the old key with the
+  rows it signed. Owner decision; documented in `docs/security-model.md`.
