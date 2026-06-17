@@ -26,7 +26,8 @@ struct ParsedBarcode
         PlainText,
         GTIN,
         GS1,
-        GS1DigitalLink
+        GS1DigitalLink,
+        FreeText // printed-label scan: batch/expiry text extracted, not a product key
     };
 
     Type type = PlainText;

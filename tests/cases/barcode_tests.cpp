@@ -521,6 +521,39 @@ TestStats run_barcode_tests(QSqlDatabase db, qint64 userId)
         s.check(p.expiry == QStringLiteral("2027-01-01"), QStringLiteral("ai11 then ai17 expiry"));
     }
 
+    // ── Printed-label free text (port of QrParser.php::parseFreeText) ─────────
+    {
+        const ParsedBarcode p
+            = Barcode::parse(QStringLiteral("Batch No: AB123  Exp Date: 03/2027"));
+        s.check(p.type == ParsedBarcode::FreeText, QStringLiteral("label: type FreeText"));
+        s.check(!p.isBarcode, QStringLiteral("label: not a product barcode"));
+        s.check(p.lot == QStringLiteral("AB123"), QStringLiteral("label: batch extracted"));
+        // MM/YYYY → last day of the month.
+        s.check(p.expiry == QStringLiteral("2027-03-31"),
+                QStringLiteral("label: MM/YYYY expiry -> end of month"));
+    }
+    {
+        const ParsedBarcode p
+            = Barcode::parse(QStringLiteral("BATCH NO. XY-99/2   Expiry: 15/06/2026"));
+        s.check(p.type == ParsedBarcode::FreeText, QStringLiteral("label2: FreeText"));
+        s.check(p.lot == QStringLiteral("XY-99/2"), QStringLiteral("label2: batch with -/ chars"));
+        s.check(p.expiry == QStringLiteral("2026-06-15"),
+                QStringLiteral("label2: DD/MM/YYYY expiry"));
+    }
+    {
+        // An MRP label with no batch/expiry still classifies as FreeText.
+        const ParsedBarcode p = Barcode::parse(QStringLiteral("M.R.P. Rs. 250.00"));
+        s.check(p.type == ParsedBarcode::FreeText, QStringLiteral("label3: MRP label -> FreeText"));
+        s.check(p.lot.isEmpty() && p.expiry.isEmpty(),
+                QStringLiteral("label3: no batch/expiry captured"));
+    }
+    {
+        // A plain product name (no label keywords) stays PlainText for search.
+        const ParsedBarcode p = Barcode::parse(QStringLiteral("Panadol 500mg"));
+        s.check(p.type == ParsedBarcode::PlainText, QStringLiteral("plain name stays PlainText"));
+        s.check(!p.isBarcode, QStringLiteral("plain name not a barcode"));
+    }
+
     return s;
 }
 

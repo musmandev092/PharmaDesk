@@ -40,9 +40,10 @@ guard; `returns` NARCOTIC_DISPENSED verb). Full suite green (3131/3131).
 
 ## Open / flagged (not yet actioned — owner decision)
 
-- **Free-text printed-label parsing** (`QrParser.php parseFreeText`: "Batch No: X  Exp: MM/YYYY")
-  is **present in PHP, absent in C++**. If the POS workflow scans printed cartons, this is a real
-  feature gap to port; otherwise it's an intentional scope cut. Flagged for your call.
+- **Free-text printed-label parsing — DONE.** Ported `QrParser.php::parseFreeText`: a scan like
+  "Batch No: AB123  Exp Date: 03/2027" now returns `type=FreeText` with the batch (`lot`) and
+  expiry extracted (DD/MM/YYYY, and MM/YYYY → last day of month), so the caller can pre-fill
+  them. Plain product names still fall through to PlainText search. Covered by `barcode` tests.
 - **>4-dp input rounding timing**: C++ rounds money inputs to 4 dp at parse (its int64-scale-4
   representation) while PHP defers rounding to the end. Identical results for inputs honoring the
   `DECIMAL(12,4)` ≤4-dp contract (all persisted values); only transient >4-dp strings differ.

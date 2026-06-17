@@ -328,7 +328,53 @@ ParsedBarcode parse(const QString &scanned)
         return out;
     }
 
-    // 5) Fallback: not a barcode we recognize — treat as a search query.
+    // 5) Printed-label free text — a human-readable carton/strip label rather than
+    //    a scannable code (e.g. "Batch No: AB123  Exp Date: 03/2027"). Port of
+    //    QrParser.php::parseFreeText: pull out the batch and expiry so the caller
+    //    can pre-fill them. Not a product key, so isBarcode stays false.
+    static const QRegularExpression labelRe(
+        QStringLiteral("batch\\s*no|exp(?:iry)?\\.?\\s*date|m\\.?r\\.?p"),
+        QRegularExpression::CaseInsensitiveOption);
+    if (labelRe.match(s).hasMatch()) {
+        out.type = ParsedBarcode::FreeText;
+
+        static const QRegularExpression batchRe(
+            QStringLiteral("batch\\s*no\\.?\\s*[:\\s]+([A-Z0-9\\-/]+)"),
+            QRegularExpression::CaseInsensitiveOption);
+        const QRegularExpressionMatch bm = batchRe.match(s);
+        if (bm.hasMatch()) {
+            out.lot = bm.captured(1).trimmed();
+        }
+
+        // Expiry as DD/MM/YYYY (or DD-MM-YYYY).
+        static const QRegularExpression expDmy(
+            QStringLiteral(
+                "exp(?:iry|\\.?\\s*date)?[:\\s.]+(\\d{1,2})[/\\-](\\d{1,2})[/\\-](\\d{4})"),
+            QRegularExpression::CaseInsensitiveOption);
+        const QRegularExpressionMatch dm = expDmy.match(s);
+        if (dm.hasMatch()) {
+            const QDate d(dm.captured(3).toInt(), dm.captured(2).toInt(), dm.captured(1).toInt());
+            if (d.isValid()) {
+                out.expiry = d.toString(QStringLiteral("yyyy-MM-dd"));
+            }
+        } else {
+            // Expiry as MM/YYYY → last day of that month (printed-label convention).
+            static const QRegularExpression expMy(
+                QStringLiteral("exp(?:iry|\\.?\\s*date)?[:\\s.]+(\\d{1,2})[/\\-](\\d{4})"),
+                QRegularExpression::CaseInsensitiveOption);
+            const QRegularExpressionMatch mm = expMy.match(s);
+            if (mm.hasMatch()) {
+                const QDate first(mm.captured(2).toInt(), mm.captured(1).toInt(), 1);
+                if (first.isValid()) {
+                    out.expiry = QDate(first.year(), first.month(), first.daysInMonth())
+                                     .toString(QStringLiteral("yyyy-MM-dd"));
+                }
+            }
+        }
+        return out;
+    }
+
+    // 6) Fallback: not a barcode we recognize — treat as a search query.
     return out; // PlainText
 }
 
