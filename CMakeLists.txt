@@ -108,6 +108,7 @@ add_library(pharmadesk_core STATIC
     src/ui/DashboardPage.cpp
     src/ui/SetupWizard.cpp
     src/ui/LoginDialog.cpp
+    src/ui/ActivationDialog.cpp
     src/ui/setup/SetupPages.cpp
     src/ui/MedicinesPage.cpp
     src/ui/MedicineDialog.cpp

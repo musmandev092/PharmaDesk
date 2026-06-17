@@ -9,6 +9,9 @@
 #include "domain/PinPolicy.h"
 #include "domain/SettingsKeys.h"
 #include "ui/ChangePinDialog.h"
+#include "data/Audit.h"
+#include "domain/Licensing.h"
+#include "ui/ActivationDialog.h"
 #include "ui/LoginDialog.h"
 #include "ui/SetupWizard.h"
 #include "ui/Theme.h"
@@ -96,6 +99,20 @@ int main(int argc, char *argv[])
     SettingsRepository settings(db.handle());
     UserRepository users(db.handle());
     Theme::apply(settings.get(SettingsKeys::Theme));
+
+    // Offline, node-locked activation. Gated by Licensing::enforced(): only a
+    // build with an embedded public key AND release/launcher opt-in enforces it, so
+    // dev/CI/tests/screenshots are never blocked. Block here until a valid license
+    // for THIS machine is installed (or the user quits).
+    if (Licensing::enforced() && Licensing::check().state != QLatin1String("ok")) {
+        ActivationDialog activation(Licensing::check().state);
+        if (activation.exec() != QDialog::Accepted
+            || Licensing::check().state != QLatin1String("ok")) {
+            return 0;
+        }
+        Audit::write(db.handle(), 0, QStringLiteral("LICENSE_ACTIVATED"), QStringLiteral("system"),
+                     0, QString(), Licensing::currentCode());
+    }
 
     // Install the desktop menu entry + icon on AppImage launch and note whether
     // this is a first install or an upgrade (no-op outside an AppImage). The
