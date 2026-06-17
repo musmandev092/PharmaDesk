@@ -74,11 +74,13 @@ and `noExplicitConstructor` are worth fixing first.
   **Key rotation — DONE:** `pharmadesk --rotate-audit-key` archives the current key and starts a
   fresh one; `verifyChain` accepts the current or any archived key, so pre-rotation rows still
   verify (planned-refresh policy in `docs/security-model.md`; tested in `audit_chain`).
-- **Mutation testing (Phase 8).** `mull` is not installable on this host: it is not in the
-  Arch repos/AUR and the system ships **LLVM 22**, ahead of mull's supported LLVM. Plan: run
-  mull in a pinned-LLVM (≤18) Docker image against the trust-core TUs; record honest
-  per-module scores and document equivalent mutants here. Until then mutation score = _not
-  measured_ (not 0 — unmeasured).
+- **Mutation testing (Phase 8) — MEASURED.** `mull` still can't build against the host's
+  **LLVM 22** (and no usable Docker here), so a self-contained harness `tools/mutation_test.py`
+  measures the same thing with the project toolchain. Trust core: **69/87 raw = 79.3%**; after
+  killing the 3 genuine survivors it found (Money `.5` parse + `toString(0)`, now tested) and
+  excluding 15 documented **equivalent** mutants, it kills every non-equivalent mutant. Honest
+  per-module scores + the equivalent-mutant reasons are in `docs/mutation-testing.md` (not
+  gamed). The `mull` Docker recipe remains for a host that has Docker.
 - **Production data migration** from the legacy Postgres app is out of scope and its source
   is absent (see `docs/audit_findings.json`).
 

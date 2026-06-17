@@ -1540,6 +1540,26 @@ TestStats run_money_tests(QSqlDatabase db, qint64 userId)
         s.check(ok, QStringLiteral("overflow: normal pharmacy-scale arithmetic does NOT throw"));
     }
 
+    // ── Parse edge: a leading-dot number (".5") keeps its fractional part. Pins
+    //    the dot<0 branch in fromString (mutation testing found these uncovered). ──
+    s.check(
+        Money::fromString(QStringLiteral(".5")).compare(Money::fromString(QStringLiteral("0.5")))
+            == 0,
+        QStringLiteral("parse: \".5\" == 0.5"));
+    s.check(Money::fromString(QStringLiteral(".5")).toString() == QStringLiteral("0.50"),
+            QStringLiteral("parse: \".5\" -> 0.50 (not 0)"));
+    s.check(Money::fromString(QStringLiteral(".25")).toString(2) == QStringLiteral("0.25"),
+            QStringLiteral("parse: \".25\" -> 0.25"));
+
+    // ── toString(scale=0): integer rupees, NO trailing dot, HALF_UP rounding.
+    //    Pins the `scale > 0` branch (mutation testing found it uncovered). ──
+    s.check(Money::fromString(QStringLiteral("5.00")).toString(0) == QStringLiteral("5"),
+            QStringLiteral("toString(0): 5.00 -> \"5\" (no trailing dot)"));
+    s.check(Money::fromString(QStringLiteral("5.6")).toString(0) == QStringLiteral("6"),
+            QStringLiteral("toString(0): 5.6 -> \"6\" (HALF_UP)"));
+    s.check(Money::fromString(QStringLiteral("5.4")).toString(0) == QStringLiteral("5"),
+            QStringLiteral("toString(0): 5.4 -> \"5\""));
+
     return s;
 }
 

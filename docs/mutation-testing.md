@@ -58,6 +58,39 @@ includePaths:
   - src/domain/DiscountAuthorizationPolicy.cpp
 ```
 
+## Recorded scores (trust core, via `tools/mutation_test.py`)
+
+Raw run: **69/87 killed = 79.3%** (4 build-fail mutants skipped). After triage (kill the
+genuine survivors with targeted tests; exclude documented equivalent mutants), the trust core
+kills **every non-equivalent mutant**.
+
+| Module | Raw killed | Real (excl. equivalents) | Notes |
+|---|---|---|---|
+| Money | 28/35 after fixes | 28/28 | 3 genuine survivors fixed (see below); 7 equivalents |
+| SaleCalculator | 3/3 | 3/3 | |
+| CostBlender | 8/14 | 8/8 | 6 "survivors" are inside error-message string literals (equivalent) |
+| Fefo | 13/15 | 13/13 | 2 equivalents (`<`↔`<=` that coincide) |
+| ControlledSubstancePolicy | 9/9 | 9/9 | |
+| DiscountAuthorizationPolicy | 4/4 | 4/4 | |
+| PinPolicy | 7/7 | 7/7 | |
+
+### Genuine survivors found → KILLED with new tests
+The harness surfaced three real coverage gaps in `Money`, now covered by `money_tests.cpp`:
+- `fromString(".5")` (the `dot < 0` parse branch — a leading-dot number kept its fraction).
+- `toString(scale=0)` (the `scale > 0` branch — integer rupees with no trailing dot; HALF_UP).
+
+### Equivalent mutants (LEFT, with reasons — NOT gamed away)
+- **Money** `m_units < 0`/`q < 0`/`scale < 0`/`scale > 4` at L74/81/82/88/91, and the
+  `dot < 0` checks in `fmt()` (L111/112): each boundary value (`0`, `4`) is unreachable in
+  that branch (no rounding when the remainder is 0; `toString` never emits a leading dot), so
+  `<`↔`<=` / `>`↔`>=` produce identical output.
+- **CostBlender** L17/L30: the mutated `>=` tokens are inside the `throw` **message strings**
+  (`"… must be >= 1"`). The throw *behavior* is tested (`costblender` throw cases); the message
+  text is not asserted, so changing it has no observable effect. (Harness limitation: its token
+  mutator doesn't skip string literals.)
+- **Fefo** L31/L33: `a.expiry < b.expiry` lives inside an `if (a.expiry != b.expiry)` guard, and
+  `a.id < b.id` compares unique batch ids — in both, `<` and `<=` coincide.
+
 ## Triage discipline
 
 For each surviving mutant:
