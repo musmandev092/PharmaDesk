@@ -154,6 +154,11 @@ install(FILES packaging/pharmadesk.png
 install(FILES README.md DESTINATION share/doc/pharmadesk)
 install(DIRECTORY resources/templates/ DESTINATION share/pharmadesk/templates)
 
+# Ship the self-installer at the tarball ROOT so the vendor can extract and run
+# `./install.sh` on each PC (drops the app under ~/.local, writes a launcher, and
+# registers the menu entry). `./uninstall.sh` reverses it, keeping the database.
+install(PROGRAMS packaging/install.sh packaging/uninstall.sh DESTINATION ".")
+
 # ── Packaging (CPack → portable .tar.gz for the release workflow) ────────────
 # `cpack -G TGZ` produces pharmadesk-<version>-Linux.tar.gz with the installed
 # layout above. The version is PROJECT_VERSION (single source — see ADR-0005).

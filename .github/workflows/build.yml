@@ -65,7 +65,9 @@ jobs:
           cd build
           cpack -G TGZ
           TARBALL=$(ls pharmadesk-*-Linux-x86_64.tar.gz | head -1)
-          sha256sum "$TARBALL" > "$TARBALL.sha256"
+          # Checksum BOTH the tarball and the binary inside it, so the vendor can
+          # verify the exact artifact shipped (mirrors LabDesk's release checksums).
+          sha256sum "$TARBALL" pharmadesk > "$TARBALL.sha256"
           echo "tarball=build/$TARBALL" >> "$GITHUB_OUTPUT"
           echo "sha256=build/$TARBALL.sha256" >> "$GITHUB_OUTPUT"
           echo "Built $TARBALL"
@@ -99,7 +101,8 @@ jobs:
           name: PharmaDesk ${{ steps.ver.outputs.tag }}
           body: |
             Automated release of PharmaDesk ${{ steps.ver.outputs.tag }}.
-            Portable Linux x86_64 tarball (extract and run `bin/pharmadesk`).
+            Linux x86_64 tarball: extract and run `./install.sh` on each PC
+            (registers a launcher + menu entry; `./uninstall.sh` reverses it).
             Verify with the included `.sha256`.
           files: |
             ${{ steps.pkg.outputs.tarball }}
