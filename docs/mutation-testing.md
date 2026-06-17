@@ -4,13 +4,25 @@ Mutation testing proves the trust-core tests actually **kill** injected bugs, no
 execute lines. We use [`mull`](https://github.com/mull-project/mull) (LLVM-based) on the
 trust-core translation units.
 
-## Why it isn't wired into CI yet (honest status)
+## Two ways to run it
 
-`mull` links against a specific LLVM and lags new LLVM releases. The dev/CI host ships
-**LLVM 22**, which current `mull` does not support, and `mull` is not packaged for Arch
-(only `mullvad` appears in the AUR). So mull cannot be built against the host toolchain.
+1. **`tools/mutation_test.py` (no mull / LLVM / Docker needed) — the one that runs here.**
+   A self-contained source-mutation harness: it mutates one trust-core token at a time
+   (relational/equality/logical/arithmetic swaps, `return true`↔`false`), rebuilds
+   `pharmadesk_tests` with the project's own toolchain, runs the suite, and classifies each
+   mutant **KILLED** (suite failed — good), **SURVIVED** (suite still passed — triage), or
+   **BUILD_FAIL** (didn't compile — skipped). Score = killed / (killed + survived).
+   ```bash
+   python3 tools/mutation_test.py                 # trust core
+   python3 tools/mutation_test.py src/domain/Money.cpp
+   ```
+   It disables core dumps for the test child (a killed mutant often `abort()`s on an uncaught
+   exception — expected; without this every kill would spawn a systemd-coredump notification).
+   Per-module + overall scores and the survivor list are recorded below as they're measured.
 
-**Mutation score: _not measured_** (not 0 — unmeasured). Do not report a fabricated score.
+2. **`mull`** (below) — the industry-standard LLVM mutation tester. Not usable on *this* host:
+   `mull` lags LLVM and the host ships **LLVM 22** (and it isn't packaged for Arch / no usable
+   Docker here), so use the pinned-LLVM container recipe on a machine that has Docker.
 
 ## How to run it (pinned-LLVM container)
 
