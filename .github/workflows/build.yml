@@ -46,6 +46,19 @@ jobs:
       - name: Build
         run: cmake --build build -j"$(nproc)"
 
+      - name: Verify version surface matches CMake
+        # The shipped binary must report the same version the build was tagged with
+        # (single source: CMake PROJECT_VERSION → PHARMADESK_VERSION → Branding →
+        # `--version` + the UI footer/About). Fail the release if they ever diverge.
+        run: |
+          REPORTED=$(./build/pharmadesk --version | awk '{print $2}')
+          EXPECTED="${{ steps.ver.outputs.version }}"
+          echo "binary --version: $REPORTED   CMake version: $EXPECTED"
+          if [ "$REPORTED" != "$EXPECTED" ]; then
+            echo "::error::binary --version ($REPORTED) != CMake version ($EXPECTED)"
+            exit 1
+          fi
+
       - name: Package (CPack → TGZ) + checksum
         id: pkg
         run: |

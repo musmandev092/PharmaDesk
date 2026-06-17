@@ -50,6 +50,7 @@ private:
     QWidget *buildUsersTab();
     QWidget *buildAuditTab();
     QWidget *buildBackupTab();
+    QWidget *buildAboutTab();
 
     QSqlDatabase m_db;
     UserRecord m_user;

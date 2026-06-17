@@ -212,12 +212,14 @@ MainWindow::MainWindow(QSqlDatabase db, const UserRecord &user, QWidget *parent)
     // Steady product name in the title bar (never per-section).
     setWindowTitle(Branding::productName());
 
-    // Slim footer: the product + version (single-sourced from CMake PROJECT_VERSION
-    // via Branding::appVersion()) sits permanently on the right; transient notices
-    // (e.g. a completed backup) flash on the left.
+    // Slim footer: product + version + the developer credit (single-sourced from
+    // Branding / CMake PROJECT_VERSION) sit permanently on the right; transient
+    // notices (e.g. a completed backup) flash on the left.
     statusBar()->setSizeGripEnabled(false);
-    auto *versionLabel = new QLabel(
-        QStringLiteral("%1 v%2").arg(Branding::productName(), Branding::appVersion()), this);
+    auto *versionLabel = new QLabel(QStringLiteral("%1 v%2  ·  Developed by %3  ·  %4")
+                                        .arg(Branding::productName(), Branding::appVersion(),
+                                             Branding::developer(), Branding::developerGithub()),
+                                    this);
     versionLabel->setObjectName(QStringLiteral("footerVersion"));
     versionLabel->setStyleSheet(QStringLiteral("color: palette(mid); padding: 0 8px;"));
     statusBar()->addPermanentWidget(versionLabel);

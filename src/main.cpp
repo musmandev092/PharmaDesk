@@ -21,10 +21,20 @@
 #include <QLockFile>
 #include <QMessageBox>
 
+#include <cstdio>
+#include <cstring>
 #include <exception>
 
 int main(int argc, char *argv[])
 {
+    // Version surface (single-sourced from CMake PROJECT_VERSION via
+    // PHARMADESK_VERSION). Prints and exits before any GUI init, so CI/scripts can
+    // verify the shipped binary's version matches the build.
+    if (argc > 1 && (std::strcmp(argv[1], "--version") == 0 || std::strcmp(argv[1], "-v") == 0)) {
+        std::printf("%s %s\n", "PharmaDesk", PHARMADESK_VERSION);
+        return 0;
+    }
+
     // Cursor size fix: on a Wayland session this app runs through XWayland (the
     // bundled Qt ships only the xcb platform plugin). XWayland doesn't inherit the
     // compositor's cursor size, so without XCURSOR_SIZE the pointer renders

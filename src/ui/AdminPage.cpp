@@ -1,6 +1,8 @@
 #include "ui/AdminPage.h"
 
 #include "Branding.h"
+#include "domain/Licensing.h"
+
 #include "data/AuditRepository.h"
 #include "data/EscPosRenderer.h"
 #include "data/SettingsRepository.h"
@@ -112,6 +114,7 @@ AdminPage::AdminPage(QSqlDatabase db, const UserRecord &user, QWidget *parent)
     tabs->addTab(buildUsersTab(), QStringLiteral("Users"));
     tabs->addTab(buildAuditTab(), QStringLiteral("Audit log"));
     tabs->addTab(buildBackupTab(), QStringLiteral("Backup"));
+    tabs->addTab(buildAboutTab(), QStringLiteral("About"));
 
     // ── Full-width scroll wrapper ───────────────────────────────────────────
     // The whole page scrolls on short screens and uses the FULL viewport width
@@ -145,6 +148,65 @@ AdminPage::AdminPage(QSqlDatabase db, const UserRecord &user, QWidget *parent)
 
     loadBackupSettings();
     reload();
+}
+
+// ── About tab (fixed product/developer credit + licensing status) ───────
+QWidget *AdminPage::buildAboutTab()
+{
+    auto *tab = new QWidget;
+    auto *outer = new QVBoxLayout(tab);
+    outer->setContentsMargins(24, 24, 24, 24);
+    outer->setSpacing(16);
+
+    // Product + developer credit.
+    auto [card, body] = makeCard(tab);
+    body->addLayout(makeCardHeader(card, QStringLiteral("About %1").arg(Branding::productName()),
+                                   Branding::productTagline()));
+    auto *form = makeForm();
+    form->addRow(
+        QStringLiteral("Product"),
+        new QLabel(Branding::productName() + QStringLiteral(" v") + Branding::appVersion(), card));
+    form->addRow(QStringLiteral("Developer"), new QLabel(Branding::developer(), card));
+    auto *gh = new QLabel(Branding::developerGithub(), card);
+    gh->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    form->addRow(QStringLiteral("GitHub"), gh);
+    auto *contact = new QLabel(Branding::developerEmails().join(QStringLiteral("  ·  ")), card);
+    contact->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    contact->setWordWrap(true);
+    form->addRow(QStringLiteral("Contact"), contact);
+    body->addLayout(form);
+    outer->addWidget(card);
+
+    // Licensing / activation status.
+    auto [lcard, lbody] = makeCard(tab);
+    lbody->addLayout(makeCardHeader(lcard, QStringLiteral("Activation"),
+                                    QStringLiteral("Offline, node-locked license for this PC.")));
+    auto *lform = makeForm();
+    auto *codeLbl = new QLabel(Licensing::currentCode(), lcard);
+    codeLbl->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    lform->addRow(QStringLiteral("This computer's code"), codeLbl);
+    if (Licensing::configured()) {
+        const Licensing::CheckResult lc = Licensing::check();
+        QString status = lc.state == QLatin1String("ok")
+                             ? QStringLiteral("Licensed")
+                             : QStringLiteral("Not activated (%1)").arg(lc.state);
+        const QString licensee = lc.payload.value(QStringLiteral("licensee")).toString();
+        const QString expiry = lc.payload.value(QStringLiteral("expiry")).toString();
+        if (!licensee.isEmpty()) {
+            status += QStringLiteral(" — %1").arg(licensee);
+        }
+        if (!expiry.isEmpty()) {
+            status += QStringLiteral(" (expires %1)").arg(expiry);
+        }
+        lform->addRow(QStringLiteral("Status"), new QLabel(status, lcard));
+    } else {
+        lform->addRow(QStringLiteral("Status"),
+                      new QLabel(QStringLiteral("Not enforced in this build."), lcard));
+    }
+    lbody->addLayout(lform);
+    outer->addWidget(lcard);
+    outer->addStretch();
+    return tab;
 }
 
 // ── Pharmacy tab (identity + theme + logo; editable any time) ──────────

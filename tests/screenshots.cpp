@@ -301,6 +301,9 @@ int main(int argc, char *argv[])
                 t->setCurrentIndex(3);
                 QApplication::processEvents();
                 shot(&p, QStringLiteral("10_admin_audit"));
+                t->setCurrentIndex(5); // About
+                QApplication::processEvents();
+                shot(&p, QStringLiteral("10b_admin_about"));
             }
         }
         {
