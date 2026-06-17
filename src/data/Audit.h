@@ -44,8 +44,15 @@ struct ChainResult
 };
 
 // Re-derive the HMAC chain over every chained audit row (row_hmac <> '') in id
-// order and confirm each row's stored prev_hmac + row_hmac match what the secret
-// produces. Detects edits, forged hmacs, and dropped/reinserted rows.
+// order and confirm each row's stored prev_hmac + row_hmac match a known key
+// (current or any retired key). Detects edits, forged hmacs, and dropped/
+// reinserted rows.
 ChainResult verifyChain(QSqlDatabase &db);
+
+// Planned key rotation: archive the current audit key (so the rows it signed keep
+// verifying) and generate a fresh one for all NEW rows. Returns false on I/O error.
+// See docs/security-model.md for the policy (this is for planned refresh, not
+// compromise response — a retired key still validates the rows it signed).
+bool rotateKey();
 
 } // namespace Audit

@@ -35,6 +35,16 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    // Deliberate, scriptable audit-key rotation (planned refresh — see
+    // docs/security-model.md). Archives the current key so existing rows keep
+    // verifying, and starts signing new rows with a fresh key. No GUI/DB needed.
+    if (argc > 1 && std::strcmp(argv[1], "--rotate-audit-key") == 0) {
+        AppPaths::ensureDirs();
+        const bool ok = Audit::rotateKey();
+        std::printf("%s", ok ? "Audit key rotated.\n" : "Audit key rotation FAILED.\n");
+        return ok ? 0 : 1;
+    }
+
     // Cursor size fix: on a Wayland session this app runs through XWayland (the
     // bundled Qt ships only the xcb platform plugin). XWayland doesn't inherit the
     // compositor's cursor size, so without XCURSOR_SIZE the pointer renders

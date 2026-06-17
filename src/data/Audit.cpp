@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QList>
 #include <QMessageAuthenticationCode>
 #include <QRandomGenerator>
 #include <QSqlError>
@@ -16,17 +17,23 @@ namespace Audit {
 namespace {
 
 const QString kKeyFile = QStringLiteral("audit.key");
+const QString kArchiveFile = QStringLiteral("audit.key.archive");
 
-// The per-install HMAC secret: 32 random bytes beside the DB in the app-data
-// dir, owner-only (0600), generated once. Same scheme as the Z-report key.
-// NOTE (owner): a single per-install key with no rotation. Rotating the key
-// invalidates verification of rows written under the old key, so a rotation
-// procedure must archive the old key alongside the rows it signed. Documented in
-// docs/security-model.md.
+QString keyPath()
+{
+    return QDir(AppPaths::logosDir()).filePath(QStringLiteral("../") + kKeyFile);
+}
+QString archivePath()
+{
+    return QDir(AppPaths::logosDir()).filePath(QStringLiteral("../") + kArchiveFile);
+}
+
+// The CURRENT per-install HMAC secret: 32 random bytes beside the DB in the
+// app-data dir, owner-only (0600), generated once. All NEW audit rows are signed
+// with this key.
 QByteArray secret()
 {
-    const QString path = QDir(AppPaths::logosDir()).filePath(QStringLiteral("../") + kKeyFile);
-    QFile f(path);
+    QFile f(keyPath());
     if (f.exists() && f.open(QIODevice::ReadOnly)) {
         const QByteArray hex = f.readAll().trimmed();
         if (!hex.isEmpty()) {
@@ -44,6 +51,33 @@ QByteArray secret()
         f.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
     }
     return key;
+}
+
+// Retired keys (one hex per line in audit.key.archive). Rows signed before a
+// rotation still verify under the key that signed them.
+QList<QByteArray> archivedKeys()
+{
+    QList<QByteArray> out;
+    QFile f(archivePath());
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        for (const QByteArray &line : f.readAll().split('\n')) {
+            const QByteArray hex = line.trimmed();
+            if (!hex.isEmpty()) {
+                out << QByteArray::fromHex(hex);
+            }
+        }
+    }
+    return out;
+}
+
+// All keys a row may legitimately have been signed with: the current key first,
+// then any retired keys (rotation policy — see docs/security-model.md).
+QList<QByteArray> verificationKeys()
+{
+    QList<QByteArray> keys;
+    keys << secret();
+    keys << archivedKeys();
+    return keys;
 }
 
 // Canonical payload: every field pipe-separated, NULL→'' — identical field order
@@ -131,7 +165,7 @@ void writeOrThrow(QSqlDatabase &db, qint64 userId, const QString &actionType,
 ChainResult verifyChain(QSqlDatabase &db)
 {
     ChainResult res;
-    const QByteArray key = secret();
+    const QList<QByteArray> keys = verificationKeys(); // current + any retired keys
     QSqlQuery q(db);
     if (!q.exec(QStringLiteral(
             "SELECT id, timestamp, user_id, action_type, entity_type, entity_id, before_value, "
@@ -150,7 +184,14 @@ ChainResult verifyChain(QSqlDatabase &db)
                         q.value(10).toString());
         const QString storedPrev = q.value(11).toString();
         const QString storedHmac = q.value(12).toString();
-        if (storedPrev != prev || storedHmac != hmacHex(prev, payload, key)) {
+        bool hmacOk = false;
+        for (const QByteArray &k : keys) {
+            if (storedHmac == hmacHex(prev, payload, k)) {
+                hmacOk = true;
+                break;
+            }
+        }
+        if (storedPrev != prev || !hmacOk) {
             res.ok = false;
             res.brokenAtId = id;
             return res;
@@ -159,6 +200,34 @@ ChainResult verifyChain(QSqlDatabase &db)
         ++res.checked;
     }
     return res;
+}
+
+bool rotateKey()
+{
+    // Planned rotation: archive the current key (so the rows it signed still
+    // verify) and generate a fresh current key that all NEW rows will use.
+    const QByteArray current = secret();
+    AppPaths::ensureDirs();
+    QFile arc(archivePath());
+    if (!arc.open(QIODevice::Append | QIODevice::Text)) {
+        return false;
+    }
+    arc.write(current.toHex() + '\n');
+    arc.close();
+    arc.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+
+    QByteArray fresh(32, '\0');
+    for (int i = 0; i < fresh.size(); ++i) {
+        fresh[i] = static_cast<char>(QRandomGenerator::global()->bounded(256));
+    }
+    QFile f(keyPath());
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        return false;
+    }
+    f.write(fresh.toHex());
+    f.close();
+    f.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+    return true;
 }
 
 } // namespace Audit

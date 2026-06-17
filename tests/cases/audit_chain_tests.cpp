@@ -5,7 +5,10 @@
 #include "framework/TestStats.h"
 
 #include "data/Audit.h"
+#include "domain/AppPaths.h"
 
+#include <QDir>
+#include <QFile>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 
@@ -66,6 +69,71 @@ TestStats run_audit_chain_tests(QSqlDatabase, qint64)
         db.close();
     }
     QSqlDatabase::removeDatabase(conn);
+
+    // ── Key rotation: rows signed before a rotation still verify ─────────────
+    // rotateKey() touches the shared audit.key / audit.key.archive files, so
+    // snapshot + restore them to keep this test free of side effects.
+    {
+        const QString keyP = QDir(AppPaths::logosDir()).filePath(QStringLiteral("../audit.key"));
+        const QString arcP
+            = QDir(AppPaths::logosDir()).filePath(QStringLiteral("../audit.key.archive"));
+        auto readAll = [](const QString &p, bool *had) {
+            QFile f(p);
+            *had = f.exists();
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+        };
+        auto writeOrRemove = [](const QString &p, bool had, const QByteArray &data) {
+            if (!had) {
+                QFile::remove(p);
+                return;
+            }
+            QFile f(p);
+            if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                f.write(data);
+            }
+        };
+        bool hadKey = false, hadArc = false;
+        const QByteArray savedKey = readAll(keyP, &hadKey);
+        const QByteArray savedArc = readAll(arcP, &hadArc);
+
+        const QString rconn = QStringLiteral("audit_rotate_conn");
+        {
+            QSqlDatabase db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), rconn);
+            db.setDatabaseName(QStringLiteral(":memory:"));
+            if (db.open()) {
+                QSqlQuery ddl(db);
+                ddl.exec(QStringLiteral(
+                    "CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT, "
+                    "user_id INTEGER, action_type TEXT NOT NULL, entity_type TEXT NOT NULL, "
+                    "entity_id INTEGER, before_value TEXT, after_value TEXT, reason TEXT, "
+                    "ip_address TEXT, user_agent TEXT, prev_hmac TEXT NOT NULL DEFAULT '', "
+                    "row_hmac TEXT NOT NULL DEFAULT '')"));
+                // Two rows under the current key.
+                Audit::write(db, 1, QStringLiteral("R1"), QStringLiteral("t"), 1);
+                Audit::write(db, 1, QStringLiteral("R2"), QStringLiteral("t"), 2);
+                s.check(Audit::rotateKey(), QStringLiteral("rotate: rotateKey succeeds"));
+                // Two more rows under the NEW key, continuing the same chain.
+                Audit::write(db, 2, QStringLiteral("R3"), QStringLiteral("t"), 3);
+                Audit::write(db, 2, QStringLiteral("R4"), QStringLiteral("t"), 4);
+                const Audit::ChainResult r = Audit::verifyChain(db);
+                s.check(r.ok && r.checked == 4,
+                        QStringLiteral("rotate: chain spanning old+new keys verifies"));
+                // A forged row still breaks it.
+                QSqlQuery forge(db);
+                forge.exec(QStringLiteral(
+                    "INSERT INTO audit_log(timestamp,action_type,entity_type,prev_hmac,row_hmac) "
+                    "VALUES('2026-01-01 00:00:00','FORGED','t','beef','beef')"));
+                s.check(!Audit::verifyChain(db).ok,
+                        QStringLiteral("rotate: a forged row is still rejected after rotation"));
+            }
+            db.close();
+        }
+        QSqlDatabase::removeDatabase(rconn);
+
+        writeOrRemove(keyP, hadKey, savedKey);
+        writeOrRemove(arcP, hadArc, savedArc);
+    }
+
     return s;
 }
 

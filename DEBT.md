@@ -71,8 +71,9 @@ and `noExplicitConstructor` are worth fixing first.
   field order mirroring the PHP Postgres trigger). The per-install key is off-DB in
   `audit.key` (owner-only). `Audit::verifyChain` walks + re-derives the chain; covered by
   `audit_chain` tests (positive + tamper detection) and invariant INV-11 (whole-DB chain).
-  _Open owner decision:_ key **rotation** policy (a single per-install key today; rotating
-  invalidates verification of rows signed by the old key — see `docs/security-model.md`).
+  **Key rotation — DONE:** `pharmadesk --rotate-audit-key` archives the current key and starts a
+  fresh one; `verifyChain` accepts the current or any archived key, so pre-rotation rows still
+  verify (planned-refresh policy in `docs/security-model.md`; tested in `audit_chain`).
 - **Mutation testing (Phase 8).** `mull` is not installable on this host: it is not in the
   Arch repos/AUR and the system ships **LLVM 22**, ahead of mull's supported LLVM. Plan: run
   mull in a pinned-LLVM (≤18) Docker image against the trust-core TUs; record honest

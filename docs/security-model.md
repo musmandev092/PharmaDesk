@@ -45,10 +45,14 @@ types; Money arithmetic is overflow-checked.
 
 - Passwords/PINs: bcrypt (OS libxcrypt). No home-grown crypto.
 - Z-report signing key: `zreport.key`, owner-only, stored off the DB (see `AppPaths`).
-- Audit HMAC chain key: `audit.key`, 32 random bytes, owner-only, off the DB, generated
-  once. **Rotation** is an open owner decision — a single per-install key today; rotating it
-  invalidates verification of rows signed by the old key, so a rotation must archive the old
-  key alongside the rows it signed.
+- Audit HMAC chain key: `audit.key`, 32 random bytes, owner-only, off the DB, generated once.
+  **Rotation policy (implemented):** `pharmadesk --rotate-audit-key` archives the current key
+  to `audit.key.archive` and generates a fresh one. New rows are signed with the new key; the
+  verifier (`Audit::verifyChain`) accepts a row under the current key **or any archived key**,
+  so rows signed before the rotation still verify. This is for **planned refresh**, not
+  compromise response — a retired key still validates the rows it signed, so on a *suspected
+  key leak* you must additionally treat post-leak rows as untrusted and re-key the install.
+  Keep `audit.key`/`audit.key.archive` owner-only and backed up with the DB.
 - No hardcoded credentials or API keys in the source.
 
 ## What is out of scope
